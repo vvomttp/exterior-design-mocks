@@ -299,7 +299,9 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 document.body.appendChild(renderer.domElement);
 
-const camera = new THREE.PerspectiveCamera(46, innerWidth/innerHeight, 0.5, 3000);
+const AERIAL_FOV   = 46;                  // tight lens flatters the campus massing
+const INTERIOR_FOV = 60;                  // wide lens takes in a whole room
+const camera = new THREE.PerspectiveCamera(AERIAL_FOV, innerWidth/innerHeight, 0.5, 3000);
 
 /* ------------------------------------------------------------------ scenes */
 const exterior = new THREE.Scene();
@@ -636,7 +638,10 @@ const INTERIORS = {
     name:'North Tower — Grand Lobby',
     w:56, d:34, h:11, floor:M.floorStone, accent:0x2f7df6,
     stops:[
-      {label:'Entry',      cap:['Entry Vestibule','Revolving doors + 24 ft curtain wall'],  pos:[0,5.4,14.5],  look:[0,4.6,-6]},
+      // Arrival shot: front-left corner looking diagonally across the room.
+      // Facing the back wall square-on read as staring at an elevation; the
+      // diagonal picks up three walls, the concierge, the lounge and the atrium.
+      {label:'Entry',      cap:['Entry Vestibule','Revolving doors + 24 ft curtain wall'],  pos:[-21,5.8,15],  look:[14,1.8,-12]},
       {label:'Concierge',  cap:['Concierge Desk','Staffed 24/7 · visitor management'],      pos:[-13,4.6,2],   look:[-17,3.4,-11]},
       {label:'Lounge',     cap:['Tenant Lounge','Soft seating and café bar'],               pos:[13,4.4,4],    look:[19,3,-8]},
       {label:'Elevators',  cap:['Elevator Bank','6 cabs · destination dispatch'],           pos:[0,4.8,-4],    look:[0,4.6,-16]},
@@ -870,6 +875,7 @@ async function enterInterior(poi){
   tour.cfg = cfg; tour.i = 0;
   rig.mode = 'interior';
   rig.view = 'walk';
+  camera.fov = INTERIOR_FOV; camera.updateProjectionMatrix();
   for(const k in toolEls) toolEls[k].classList.toggle('on', k === 'walk');
   setMeasuring(false);
   clearMeasures();
@@ -903,7 +909,7 @@ async function exitInterior(){
   intUI.classList.remove('show');
   await fade(1, 460);
   activeScene = exterior;
-  camera.fov = 46; camera.updateProjectionMatrix();
+  camera.fov = AERIAL_FOV; camera.updateProjectionMatrix();
   clearInterior();
   tour.cfg = null;
   // land exactly on the framing we left from — the fade covers the change, so
@@ -1090,7 +1096,9 @@ moreBtn.addEventListener('pointerdown', e=>e.stopPropagation());
 moreBtn.addEventListener('click', e=>{ e.stopPropagation(); setMore(!moreMenu.classList.contains('open')); });
 moreMenu.addEventListener('pointerdown', e=>e.stopPropagation());
 document.getElementById('mmReset').addEventListener('click', e=>{
-  e.stopPropagation(); setMore(false); setView(rig.view || 'walk');
+  e.stopPropagation(); setMore(false);
+  camera.fov = INTERIOR_FOV; camera.updateProjectionMatrix();
+  setView(rig.view || 'walk');
 });
 document.getElementById('mmCeiling').addEventListener('click', e=>{
   e.stopPropagation(); setMore(false); setCeiling(ceilingHidden);
