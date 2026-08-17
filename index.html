@@ -598,14 +598,11 @@ slab(120, 12, M.grass, -46, .1, 22);
 slab(12, 90, M.grass, 96, .1, -30);
 
 /* ============================================================== ENTRY POINT */
-/* One destination instead of five points of interest: the North Tower entrance.
-   Same shape as the full prototype's POI records, so the framing solver and the
-   fly-in transition work unchanged. */
+/* One destination: the North Tower lobby. The transition is a cross-fade, so
+   no approach framing is needed — just which interior the button opens. */
 const ENTRY = {
   id:'entrance',
   interior:'lobby',
-  front:[0, 1],                                   // canopy faces +Z
-  frame:{x:-46, y:13, z:-16, w:58, h:46}, yaw:0.26, phi:1.16,
 };
 
 /* ============================================== INTERIOR SCENE (parametric) */
@@ -729,21 +726,6 @@ function nearestAngle(cur, target){
   return cur + d;
 }
 
-/* Solve the orbit angle + distance that puts a POI's front elevation on screen.
-   theta is derived from the facade normal; distance from the frame box and the
-   camera's real FOV/aspect, so narrow windows automatically pull back. */
-function computeFocus(p){
-  const vfov = camera.fov * Math.PI/180;
-  const hfov = 2*Math.atan(Math.tan(vfov/2) * camera.aspect);
-  const rV = (p.frame.h*0.5) / Math.tan(vfov*0.5);
-  const rH = (p.frame.w*0.5) / Math.tan(hfov*0.5);
-  return {
-    target: new THREE.Vector3(p.frame.x, p.frame.y, p.frame.z),
-    theta:  Math.atan2(p.front[0], p.front[1]) + (p.yaw||0),   // stand on the facade's side
-    phi:    p.phi || 1.15,
-    radius: clamp(Math.max(rV, rH) * 1.28, 46, 320),
-  };
-}
 
 function applyAerial(){
   const {target, theta, phi, radius} = rig;
@@ -878,21 +860,8 @@ async function enterInterior(poi){
   // save aerial state to return to
   savedAerial = {target:rig.gTarget.clone(), theta:rig.gTheta, phi:rig.gPhi, radius:rig.gRadius};
 
-  // 1) dive through the facade along its normal (reads as flying in the front door)
-  const f = poi._focus || computeFocus(poi);
-  const doorway = f.target.clone().add(
-    new THREE.Vector3(poi.front[0], 0, poi.front[1]).normalize().multiplyScalar(-9));
-  const from = {t:rig.target.clone(), th:rig.theta, ph:rig.phi, r:rig.radius};
-  const to   = {t:doorway, th:nearestAngle(rig.theta, f.theta), ph:1.30, r:24};
-  await animate(1400, k=>{
-    const e2 = easeInOut(k);
-    rig.target.lerpVectors(from.t, to.t, e2);
-    rig.theta = lerp(from.th, to.th, e2);
-    rig.phi   = lerp(from.ph, to.ph, e2);
-    rig.radius= lerp(from.r,  to.r,  e2);
-    applyAerial();
-    veil.style.opacity = Math.max(0, (k-0.55)/0.45);
-  });
+  // 1) fade the aerial view out — no camera move, the cut happens under cover
+  await fade(1, 460);
 
   // 2) swap scene
   clearInterior();
@@ -920,7 +889,7 @@ async function enterInterior(poi){
   document.getElementById('intName').textContent = cfg.name;
   intUI.classList.add('show');
 
-  await fade(0, 700);
+  await fade(0, 620);
 }
 
 async function exitInterior(){
@@ -932,16 +901,18 @@ async function exitInterior(){
   setMeasuring(false);
   clearMeasures();
   intUI.classList.remove('show');
-  await fade(1, 420);
+  await fade(1, 460);
   activeScene = exterior;
   camera.fov = 46; camera.updateProjectionMatrix();
   clearInterior();
   tour.cfg = null;
+  // land exactly on the framing we left from — the fade covers the change, so
+  // there's no swoop back out to match the old fly-in
   const a = savedAerial || HOME;
   rig.target.copy(a.target); rig.gTarget.copy(a.target);
-  rig.theta = a.theta - 0.35; rig.gTheta = a.theta;
-  rig.phi = 1.25; rig.gPhi = a.phi;
-  rig.radius = 40; rig.gRadius = a.radius;
+  rig.theta  = a.theta;  rig.gTheta  = a.theta;
+  rig.phi    = a.phi;    rig.gPhi    = a.phi;
+  rig.radius = a.radius; rig.gRadius = a.radius;
   applyAerial();
   rig.mode = 'aerial';
   rig.auto = false; rig.idle = 0;
@@ -952,17 +923,6 @@ async function exitInterior(){
 }
 document.getElementById('exitBtn').addEventListener('click', e=>{ e.stopPropagation(); exitInterior(); });
 
-function animate(ms, step){
-  return new Promise(res=>{
-    const t0 = performance.now();
-    (function loop(){
-      const k = Math.min(1, (performance.now()-t0)/ms);
-      step(k);
-      renderer.render(activeScene, camera);
-      if(k<1) requestAnimationFrame(loop); else res();
-    })();
-  });
-}
 
 
 /* ==================================================== SHOWCASE TOOLS
