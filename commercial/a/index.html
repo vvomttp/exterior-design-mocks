@@ -64,38 +64,72 @@
     font-weight:550;letter-spacing:.01em;transition:opacity .5s;pointer-events:none}
 
   /* ---------- POI pins ---------- */
+  /* A labelled chip until the pin is chosen; then just the dot, so the card
+     beside it is not covering its own title. */
   #poiLayer{position:fixed;inset:0;z-index:15;pointer-events:none}
-  .poi{position:absolute;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;
-       transition:opacity .28s ease;will-change:transform,left,top}
-  .poi .stem{position:absolute;left:50%;top:100%;width:1px;height:18px;margin-left:-.5px;
-       background:linear-gradient(to bottom,rgba(255,255,255,.85),rgba(255,255,255,0))}
-  .poi .stem::after{content:"";position:absolute;left:-3px;top:16px;width:7px;height:7px;border-radius:50%;
-       background:#fff;box-shadow:0 0 0 3px rgba(47,125,246,.35),0 2px 6px rgba(0,0,0,.4)}
-  .poi .chip{
-    display:flex;align-items:center;gap:8px;padding:7px 13px 7px 8px;border-radius:999px;
+  .poi{position:absolute;transform:translate(-50%,-50%);pointer-events:auto;cursor:pointer;
+       width:26px;height:26px;display:grid;place-items:center;
+       transition:opacity .28s ease;will-change:left,top}
+  /* white at rest so selecting a pin turns it red — the state change is the
+     colour, not just a size nudge */
+  .poi .dot{position:relative;z-index:2;
+    width:13px;height:13px;border-radius:50%;background:#fff;
+    border:2.5px solid rgba(255,255,255,.9);box-shadow:0 2px 7px rgba(9,16,30,.55);
+    transition:transform .18s cubic-bezier(.34,1.56,.64,1),background .18s ease}
+  .poi.active .dot{background:var(--accent)}
+  .poi:hover .dot{transform:scale(1.28)}
+  .poi.active .dot{transform:scale(1.34)}
+  /* a ring that sits under the active dot, so the selected pin still reads
+     once the label is gone */
+  .poi .halo{position:absolute;z-index:0;width:26px;height:26px;border-radius:50%;
+    border:1.5px solid var(--accent);opacity:0;transform:scale(.6);
+    transition:opacity .22s,transform .3s cubic-bezier(.34,1.56,.64,1)}
+  .poi.active .halo{opacity:.75;transform:scale(1)}
+  /* Unselected: the original labelled chip above the dot. Selected: chip out of
+     the way, leaving the dot and a leader line to the card beside it. */
+  .poi .chip{position:absolute;bottom:calc(100% + 10px);left:50%;
+    display:flex;align-items:center;gap:8px;padding:6px 12px 6px 7px;border-radius:999px;
     background:rgba(255,255,255,.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-    border:1px solid rgba(255,255,255,.75);box-shadow:var(--shadow-sm);
-    transform-origin:50% 120%;transition:transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .18s;
-    white-space:nowrap;
-  }
-  .poi:hover .chip{transform:scale(1.06);box-shadow:0 12px 26px -8px rgba(9,16,30,.5)}
-  .poi.active .chip{background:var(--accent);border-color:rgba(255,255,255,.35)}
-  .poi.active .chip .lbl{color:#fff}
-  .poi.active .chip .num{background:#fff;color:var(--accent)}
-  .poi .num{width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;
-    font-weight:700;display:grid;place-items:center;letter-spacing:-.02em}
+    border:1px solid rgba(255,255,255,.75);box-shadow:var(--shadow-sm);white-space:nowrap;
+    transform:translateX(-50%);transform-origin:50% 130%;
+    transition:opacity .18s ease,transform .2s cubic-bezier(.34,1.56,.64,1),visibility 0s 0s}
+  .poi:hover .chip{transform:translateX(-50%) scale(1.06)}
+  /* short stem tying the label to its dot, so a dense cluster still reads as
+     pairs rather than a field of chips and dots */
+  /* Anchored at the dot's centre and tall enough to reach the chip, so its
+     lower end is hidden behind the dot — no seam at any dot size. */
+  .poi .stem{position:absolute;z-index:1;left:50%;bottom:50%;width:1.5px;height:23px;
+    margin-left:-.75px;background:rgba(255,255,255,.92);
+    transition:opacity .16s ease,visibility 0s 0s}
+  .poi.active .stem{opacity:0;visibility:hidden;transition:opacity .14s ease,visibility 0s .14s}
+  .poi .num{width:19px;height:19px;border-radius:50%;background:var(--accent);color:#fff;
+    font-size:10.5px;font-weight:700;display:grid;place-items:center;letter-spacing:-.02em;flex:none}
   .poi .lbl{font-size:12px;font-weight:650;color:var(--ink);letter-spacing:-.01em}
+  /* the card names the place once it is open, so the chip would only duplicate
+     it and sit under it */
+  .poi.active .chip{opacity:0;visibility:hidden;pointer-events:none;
+    transform:translateX(-50%) scale(.9);transition:opacity .16s ease,transform .16s,visibility 0s .16s}
   .poi.occluded{opacity:.22}
   .poi.hidden{opacity:0;pointer-events:none}
 
+  /* leader line from the active dot to the card beside it */
+  /* just under #poiLayer, so the dot covers where the line lands */
+  #leaderLayer{position:fixed;inset:0;z-index:14;pointer-events:none;
+    opacity:0;transition:opacity .22s ease}
+  #leaderLayer.on{opacity:1}
+  #leaderLayer line{stroke:var(--accent);stroke-width:1.5;stroke-linecap:round}
+
   /* ---------- info card ---------- */
   #card{
-    position:fixed;z-index:40;right:22px;bottom:22px;width:330px;
+    position:fixed;z-index:40;left:22px;top:22px;width:330px;
     background:var(--paper);border-radius:18px;box-shadow:var(--shadow-lg);
-    overflow:hidden;opacity:0;transform:translateY(16px) scale(.97);pointer-events:none;
+    overflow:hidden;opacity:0;transform:translateX(-14px) scale(.97);pointer-events:none;
     transition:opacity .3s ease,transform .34s cubic-bezier(.22,1,.36,1);
   }
   #card.show{opacity:1;transform:none;pointer-events:auto}
+  /* sitting to the left of its pin, so it should arrive from the right */
+  #card.flipped{transform:translateX(14px) scale(.97)}
+  #card.flipped.show{transform:none}
   #cardArt{height:240px;position:relative;overflow:hidden;background:#0e1622}
   /* accent wash shown until the interior render is ready */
   #cardArt .ph{position:absolute;inset:0;transition:opacity .45s ease}
@@ -283,6 +317,13 @@
     text-shadow:0 2px 12px rgba(0,0,0,.6);pointer-events:none;opacity:0;transition:opacity .5s}
   #roomName.show{opacity:.92}
 
+  /* ---------- zoom ---------- */
+  /* aerial: bottom-right, the conventional corner and free on this view */
+  #zoomAerial{position:fixed;z-index:30;right:22px;bottom:22px;
+    display:flex;flex-direction:column;gap:6px;
+    transition:opacity .35s,visibility 0s 0s}
+  #zoomAerial.hide{opacity:0;visibility:hidden;transition:opacity .3s,visibility 0s .3s}
+
   @media (max-width:720px){
     #tools{bottom:16px;left:14px;gap:6px}
     .tbtn{height:38px;padding:0 13px;font-size:12px}
@@ -295,6 +336,7 @@
     #bottomScrim{height:132px}
     #intTop .logo{height:24px}
     #rightTools{bottom:16px;right:14px}
+    #zoomAerial{right:14px;bottom:16px}
     #moreMenu{bottom:64px;right:14px}
   }
 
@@ -315,6 +357,7 @@
   /* the aerial label, hint and controls fade in only once loading finishes */
   body.loading #brandLabel,
   body.loading #playBtn,
+  body.loading #zoomAerial,
   body.loading #poiLayer,
   body.loading #hint{opacity:0;visibility:hidden;pointer-events:none}
 
@@ -348,8 +391,7 @@
   }
 
   @media (max-width:640px){
-    #card{right:12px;left:12px;bottom:12px;width:auto}
-    .poi .lbl{font-size:11px}
+    #card{right:12px;left:12px;top:auto;bottom:12px;width:auto}
     #hint{display:none}
     #brandLabel .logo{height:22px}
     #stops{max-width:52vw;overflow-x:auto}
@@ -401,6 +443,7 @@
 </div>
 <div id="vignette"></div>
 <div id="poiLayer"></div>
+<svg id="leaderLayer" aria-hidden="true"><line id="leaderLine" x1="0" y1="0" x2="0" y2="0"/></svg>
 
 <div class="ui" id="brandLabel">
   <svg class="logo" viewBox="0 0 1415 298" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Matterport">
@@ -452,6 +495,24 @@
       <span>Launch interior tour</span>
     </button>
   </div>
+</div>
+
+<div id="zoomAerial">
+  <button class="iconbtn" id="zoomInA" aria-label="Zoom in">
+    <svg viewBox="0 0 38 38" fill="none" aria-hidden="true">
+      <path class="btn-bg" d="M0 19C0 8.50659 8.50659 0 19 0C29.4934 0 38 8.50659 38 19C38 29.4934 29.4934 38 19 38C8.50659 38 0 29.4934 0 19Z"/>
+      <path class="btn-ring" d="M19 0.5C29.2173 0.5 37.5 8.78273 37.5 19C37.5 29.2173 29.2173 37.5 19 37.5C8.78273 37.5 0.5 29.2173 0.5 19C0.5 8.78273 8.78273 0.5 19 0.5Z"/>
+      <rect class="btn-fg" x="17.6" y="11" width="2.8" height="16" rx="1.4"/>
+      <rect class="btn-fg" x="11" y="17.6" width="16" height="2.8" rx="1.4"/>
+    </svg>
+  </button>
+  <button class="iconbtn" id="zoomOutA" aria-label="Zoom out">
+    <svg viewBox="0 0 38 38" fill="none" aria-hidden="true">
+      <path class="btn-bg" d="M0 19C0 8.50659 8.50659 0 19 0C29.4934 0 38 8.50659 38 19C38 29.4934 29.4934 38 19 38C8.50659 38 0 29.4934 0 19Z"/>
+      <path class="btn-ring" d="M19 0.5C29.2173 0.5 37.5 8.78273 37.5 19C37.5 29.2173 29.2173 37.5 19 37.5C8.78273 37.5 0.5 29.2173 0.5 19C0.5 8.78273 8.78273 0.5 19 0.5Z"/>
+      <rect class="btn-fg" x="11" y="17.6" width="16" height="2.8" rx="1.4"/>
+    </svg>
+  </button>
 </div>
 
 <div id="interiorUI">
@@ -540,15 +601,6 @@
     </button>
   </div>
   <div id="rightTools">
-    <button class="rtbtn dark" id="shareBtn" aria-label="Share">
-      <span class="tip">Share</span>
-      <svg viewBox="0 2 38 38" aria-hidden="true">
-        <path class="btn-bg" d="M0 21C0 10.5066 8.50659 2 19 2C29.4934 2 38 10.5066 38 21C38 31.4934 29.4934 40 19 40C8.50659 40 0 31.4934 0 21Z"/>
-        <path class="btn-ring" d="M19 2.5C29.2173 2.5 37.5 10.7827 37.5 21C37.5 31.2173 29.2173 39.5 19 39.5C8.78273 39.5 0.5 31.2173 0.5 21C0.5 10.7827 8.78273 2.5 19 2.5Z"/>
-        <path class="btn-fg" d="M13.4111 17.9115L19.0003 12.3223L24.5896 17.9115L23.4111 19.09L19.8337 15.5126V26.0008H18.167L18.167 15.5126L14.5896 19.09L13.4111 17.9115Z"/>
-        <path class="btn-fg" d="M12.3337 21.8341V27.6674H25.667V21.8341H27.3337V29.3341H10.667V21.8341H12.3337Z"/>
-      </svg>
-    </button>
     <button class="rtbtn dark" id="moreBtn" aria-label="More options">
       <svg viewBox="42 2 38 38" aria-hidden="true">
         <path class="btn-bg" d="M42 21C42 10.5066 50.5066 2 61 2C71.4934 2 80 10.5066 80 21C80 31.4934 71.4934 40 61 40C50.5066 40 42 31.4934 42 21Z"/>
@@ -1321,15 +1373,8 @@ dom.addEventListener('pointermove', e=>{
 });
 addEventListener('pointerup', ()=>{ dragging=false; });
 dom.addEventListener('wheel', e=>{
-  e.preventDefault(); nudge();
-  if(rig.mode==='aerial') rig.gRadius = clamp(rig.gRadius * (1 + Math.sign(e.deltaY)*0.09), 70, 420);
-  else if(rig.mode==='interior' && rig.view!=='walk')
-    rig.gRadius = clamp(rig.gRadius * (1 + Math.sign(e.deltaY)*0.09), 14, 260);
-  else if(rig.mode==='interior'){
-    // Showcase zooms the lens in walk mode rather than moving you
-    camera.fov = clamp(camera.fov + Math.sign(e.deltaY)*3, 34, 76);
-    camera.updateProjectionMatrix();
-  }
+  e.preventDefault();
+  zoomBy(Math.sign(e.deltaY));
 }, {passive:false});
 // a click on empty space (not a drag) hands the view back to the auto-orbit
 dom.addEventListener('click', ev=>{
@@ -1378,11 +1423,33 @@ function fade(to, ms){
 
 const playBtn = document.getElementById('playBtn');
 const brandLabel = document.getElementById('brandLabel');
+const zoomAerial = document.getElementById('zoomAerial');
 playBtn.addEventListener('pointerdown', e=>e.stopPropagation());
 
 document.getElementById('launch').addEventListener('click', e=>{
   e.stopPropagation();
   if(activePOI) enterInterior(activePOI);
+});
+
+/* One definition of what zoom means per mode. The buttons only exist on the
+   aerial view; inside a tour the wheel still routes through here, so scroll
+   keeps working on the overhead views and the walk-mode lens. */
+function zoomBy(sign, step){
+  step = step || 0.09;
+  nudge();
+  if(rig.mode === 'aerial')
+    rig.gRadius = clamp(rig.gRadius * (1 + sign*step), 70, 420);
+  else if(rig.mode === 'interior' && rig.view !== 'walk')
+    rig.gRadius = clamp(rig.gRadius * (1 + sign*step), 14, 260);
+  else if(rig.mode === 'interior'){
+    camera.fov = clamp(camera.fov + sign*(step > 0.12 ? 6 : 3), 34, 76);
+    camera.updateProjectionMatrix();
+  }
+}
+[['zoomInA',-1],['zoomOutA',1]].forEach(([id,sign])=>{
+  const el = document.getElementById(id);
+  el.addEventListener('pointerdown', e=>e.stopPropagation());
+  el.addEventListener('click', e=>{ e.stopPropagation(); zoomBy(sign, 0.18); });
 });
 
 /* Orbit playback. A deliberate pause is stickier than the automatic one: the
@@ -1411,6 +1478,7 @@ async function enterInterior(poi){
   card.classList.remove('show');
   poiLayer.style.opacity = 0;
   playBtn.classList.add('hide');
+  zoomAerial.classList.add('hide');
   brandLabel.classList.add('hide');
 
   // save aerial state to return to
@@ -1476,6 +1544,7 @@ async function exitInterior(){
   document.getElementById('hint').style.opacity = 1;
   poiLayer.style.opacity = 1;
   playBtn.classList.remove('hide');
+  zoomAerial.classList.remove('hide');
   brandLabel.classList.remove('hide');
   await fade(0, 620);
 }
@@ -1648,7 +1717,7 @@ function updateMeasureLabels(){
 function setMore(open){ moreMenu.classList.toggle('open', open); }
 moreBtn.addEventListener('pointerdown', e=>e.stopPropagation());
 // decorative in this prototype: swallow the events so they don't reach the scene
-['shareBtn','aiBtn'].forEach(id=>{
+['aiBtn'].forEach(id=>{
   const el = document.getElementById(id);
   el.addEventListener('pointerdown', e=>e.stopPropagation());
   el.addEventListener('click', e=>e.stopPropagation());
@@ -1676,7 +1745,11 @@ const poiLayer = document.getElementById('poiLayer');
 POIS.forEach(p=>{
   const el = document.createElement('div');
   el.className = 'poi';
-  el.innerHTML = `<div class="chip"><div class="num">${p.n}</div><div class="lbl">${p.title}</div></div><div class="stem"></div>`;
+  el.innerHTML = '<span class="halo"></span><span class="stem"></span>'
+    + '<span class="dot"></span>'
+    + '<span class="chip"><span class="num">' + p.n + '</span>'
+    + '<span class="lbl">' + p.title + '</span></span>';
+  el.setAttribute('aria-label', p.title);
   el.addEventListener('click', e=>{ e.stopPropagation(); selectPOI(p); });
   el.addEventListener('pointerdown', e=>e.stopPropagation());
   poiLayer.appendChild(el);
@@ -1697,6 +1770,61 @@ function paintCardArt(p){
   else   { cardArt.classList.remove('ready'); cardImg.removeAttribute('src'); }
 }
 
+/* Leader line from the active dot to the edge of the card facing it. Redrawn
+   every frame alongside the card, so it tracks the pin as the orbit drifts. */
+const leaderLayer = document.getElementById('leaderLayer');
+const leaderLine  = document.getElementById('leaderLine');
+function drawLeader(p){
+  if(!p || !p._screen || !card.classList.contains('show')){
+    leaderLayer.classList.remove('on');
+    return;
+  }
+  const {x, y} = p._screen;
+  const r = card.getBoundingClientRect();
+  // the card sits left of the pin when flipped, so meet its right edge instead
+  const cx = card.classList.contains('flipped') ? r.right : r.left;
+  const cy = Math.max(r.top + 18, Math.min(y, r.bottom - 18));
+  // straight from the dot's centre — the pin layer sits above the leader, so
+  // the dot hides the join
+  leaderLine.setAttribute('x1', x.toFixed(1));
+  leaderLine.setAttribute('y1', y.toFixed(1));
+  leaderLine.setAttribute('x2', cx.toFixed(1));
+  leaderLine.setAttribute('y2', cy.toFixed(1));
+  leaderLayer.classList.add('on');
+}
+
+/* Park the card beside its pin, on whichever side has room.
+   The pin's screen position is recomputed every frame, so the card follows it
+   while the orbit drifts. Flips horizontally when it would run off the edge and
+   clamps vertically so it never hangs past the top or bottom. */
+const CARD_W = 330, CARD_GAP = 18, CARD_MARGIN = 16;
+function placeCardByPin(p){
+  if(!p || !p._screen) return;
+  const {x, y} = p._screen;
+  const h = card.offsetHeight || 400;
+  // prefer the right of the pin; flip left when that would overflow
+  let left = x + CARD_GAP;
+  if(left + CARD_W + CARD_MARGIN > innerWidth) left = x - CARD_GAP - CARD_W;
+  left = Math.max(CARD_MARGIN, Math.min(left, innerWidth - CARD_W - CARD_MARGIN));
+  // centre on the pin vertically, then keep it fully on screen
+  let top = y - h/2;
+  top = Math.max(CARD_MARGIN, Math.min(top, innerHeight - h - CARD_MARGIN));
+  card.style.left = left.toFixed(0)+'px';
+  card.style.top  = top.toFixed(0)+'px';
+  const flipped = left < x;
+  card.classList.toggle('flipped', flipped);
+
+  // run the leader to the card's near edge, meeting it level with the dot
+  // where possible and sliding along the edge when the card has been clamped
+  const edgeX = flipped ? left + CARD_W : left;
+  const edgeY = Math.max(top + 20, Math.min(y, top + h - 20));
+  leaderLine.setAttribute('x1', x.toFixed(0));
+  leaderLine.setAttribute('y1', y.toFixed(0));
+  leaderLine.setAttribute('x2', edgeX.toFixed(0));
+  leaderLine.setAttribute('y2', edgeY.toFixed(0));
+  leaderLayer.classList.add('on');
+}
+
 function selectPOI(p, opts){
   activePOI = p;
   POIS.forEach(q=>q.el.classList.toggle('active', q===p));
@@ -1704,7 +1832,9 @@ function selectPOI(p, opts){
   document.getElementById('cardSub').textContent   = p.sub;
   document.getElementById('cardDesc').textContent  = p.desc;
   paintCardArt(p);
+  placeCardByPin(p);
   card.classList.add('show');
+  drawLeader(p);
 
   // ease the orbit around to this POI's front elevation, and pause autoplay
   const f = computeFocus(p);
@@ -1721,6 +1851,7 @@ function selectPOI(p, opts){
 function closeCard(opts){
   const wasOpen = !!activePOI;
   card.classList.remove('show');
+  leaderLayer.classList.remove('on');
   POIS.forEach(q=>q.el.classList.remove('active'));
   activePOI = null;
   if(wasOpen && opts && opts.resume && rig.mode === 'aerial' && !rig.userPaused){
@@ -1797,9 +1928,10 @@ function updatePins(){
     const y = (-ndc.y*0.5+0.5)*innerHeight;
     const off = x<-40 || x>innerWidth+40 || y<-40 || y>innerHeight+40;
     p.el.classList.toggle('hidden', behind || off);
-    if(behind || off) continue;
+    if(behind || off){ p._screen = null; continue; }
     p.el.style.left = x.toFixed(1)+'px';
     p.el.style.top  = y.toFixed(1)+'px';
+    p._screen = {x, y};
     // occlusion test against buildings
     const dir = new THREE.Vector3().subVectors(p.pos, camPos);
     const dist = dir.length(); dir.normalize();
@@ -2026,6 +2158,10 @@ function frame(){
     rig.target.lerp(rig.gTarget, k);
     applyAerial();
     updatePins();
+    if(activePOI){
+      if(activePOI._screen){ placeCardByPin(activePOI); drawLeader(activePOI); }
+      else leaderLayer.classList.remove('on');   // pin behind a building
+    }
   }
   else if(rig.mode === 'interior' && rig.view !== 'walk'){
     // dollhouse / floor plan: same spherical orbit as the aerial view, room-sized
