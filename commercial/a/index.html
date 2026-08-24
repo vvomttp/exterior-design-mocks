@@ -12,6 +12,9 @@
     --muted:#68758a;
     --line:rgba(11,18,32,.10);
     --accent:#ff3158;        /* Matterport red */
+    --pin:#C5202B;           /* LoopNet red — POI markers */
+    --pin-tint:#F6DEDF;       /* ~15% of it over white, for hover */
+    --pin-deep:#A5141E;       /* pressed */
     --accent-deep:#c00033;   /* deep variant, for pressed/hover */
     --radius:14px;
     --shadow-lg:0 24px 60px -18px rgba(9,16,30,.45), 0 4px 14px rgba(9,16,30,.14);
@@ -41,9 +44,15 @@
 
   /* ---------- aerial controls: enter + orbit playback ---------- */
   /* pins are the way in, so the orbit control stands alone */
-  #playBtn{position:fixed;z-index:30;left:50%;bottom:64px;transform:translateX(-50%);
+  /* transport cluster, bottom-left: prev · play/pause · next. The pins carry an
+     authored order (n:1..5), so stepping through them is playback of the same
+     kind the pause button already implies. */
+  #aerialTransport{position:fixed;z-index:30;left:22px;bottom:22px;
+    display:flex;align-items:center;gap:6px;
     transition:opacity .35s,visibility 0s 0s}
-  #playBtn.hide{opacity:0;visibility:hidden;transition:opacity .3s,visibility 0s .3s}
+  #aerialTransport.hide{opacity:0;visibility:hidden;transition:opacity .3s,visibility 0s .3s}
+  #prevPoiBtn .chev,#nextPoiBtn .chev{stroke:#fff;stroke-width:2.4;fill:none;
+    stroke-linecap:round;stroke-linejoin:round}
 
   /* same dark surface as the interior toolbar, sized up as the primary action */
   /* Aerial controls use the showcase idiom: the same 38px surface, drawn in SVG
@@ -67,42 +76,50 @@
   /* A labelled chip until the pin is chosen; then just the dot, so the card
      beside it is not covering its own title. */
   #poiLayer{position:fixed;inset:0;z-index:15;pointer-events:none}
-  .poi{position:absolute;transform:translate(-50%,-50%);pointer-events:auto;cursor:pointer;
-       width:26px;height:26px;display:grid;place-items:center;
+  /* The marker is anchored by its tip, not its centre: the SVG point sits at
+     73.48 of 76, so the element is pulled up a whisker past 100% to land the
+     tip exactly on the projected ground position the leader line also targets. */
+  .poi{position:absolute;transform:translate(-50%,calc(-100% + 1.3px));
+       pointer-events:auto;cursor:pointer;width:26px;height:40px;
        transition:opacity .28s ease;will-change:left,top}
-  /* white at rest so selecting a pin turns it red — the state change is the
-     colour, not just a size nudge */
-  .poi .dot{position:relative;z-index:2;
-    width:13px;height:13px;border-radius:50%;background:#fff;
-    border:2.5px solid rgba(255,255,255,.9);box-shadow:0 2px 7px rgba(9,16,30,.55);
-    transition:transform .18s cubic-bezier(.34,1.56,.64,1),background .18s ease}
-  .poi.active .dot{background:var(--accent)}
-  .poi:hover .dot{transform:scale(1.28)}
-  .poi.active .dot{transform:scale(1.34)}
-  /* a ring that sits under the active dot, so the selected pin still reads
-     once the label is gone */
-  .poi .halo{position:absolute;z-index:0;width:26px;height:26px;border-radius:50%;
-    border:1.5px solid var(--accent);opacity:0;transform:scale(.6);
+
+  /* Three ordered steps rather than two: neutral at rest, a brand tint under
+     the cursor, full LoopNet red once chosen. Colour is what marks the
+     selection, so hover deliberately stops short of it. */
+  .poi .arrow{position:relative;z-index:2;display:block;width:26px;height:40px;
+    filter:drop-shadow(0 3px 6px rgba(9,16,30,.45));
+    transform-origin:50% 96%;   /* scale about the tip, so the point never drifts */
+    transition:transform .18s cubic-bezier(.34,1.56,.64,1)}
+  /* #EAEAEA is the stroke the source asset shipped with — it holds an edge
+     over pale roofs and paving where a white-on-white outline disappears */
+  .poi .arrow .shape{fill:#fff;stroke:#EAEAEA;stroke-width:3;
+    transition:fill .18s ease,stroke .18s ease}
+
+  .poi:hover .arrow{transform:translateY(-2px) scale(1.06)}
+  .poi:hover .arrow .shape{fill:var(--pin-tint);stroke:var(--pin)}
+
+  .poi.active .arrow{transform:scale(1.14)}
+  .poi.active .arrow .shape{fill:var(--pin);stroke:#fff}
+
+  /* Ring on the ground at the tip, so the chosen pin still reads once its
+     label has stepped aside for the card. */
+  .poi .halo{position:absolute;z-index:0;left:50%;bottom:0;width:26px;height:26px;
+    margin:0 0 -13px -13px;border-radius:50%;
+    border:1.5px solid var(--pin);opacity:0;transform:scale(.6);
     transition:opacity .22s,transform .3s cubic-bezier(.34,1.56,.64,1)}
   .poi.active .halo{opacity:.75;transform:scale(1)}
-  /* Unselected: the original labelled chip above the dot. Selected: chip out of
-     the way, leaving the dot and a leader line to the card beside it. */
-  .poi .chip{position:absolute;bottom:calc(100% + 10px);left:50%;
+
+  /* Unselected: the labelled chip above the marker. Selected: chip out of the
+     way, leaving the arrow and a leader line to the card beside it. The old
+     stem is gone — the arrow points at its own target now. */
+  .poi .chip{position:absolute;bottom:calc(100% + 8px);left:50%;
     display:flex;align-items:center;gap:8px;padding:6px 12px 6px 7px;border-radius:999px;
     background:rgba(255,255,255,.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
     border:1px solid rgba(255,255,255,.75);box-shadow:var(--shadow-sm);white-space:nowrap;
     transform:translateX(-50%);transform-origin:50% 130%;
     transition:opacity .18s ease,transform .2s cubic-bezier(.34,1.56,.64,1),visibility 0s 0s}
   .poi:hover .chip{transform:translateX(-50%) scale(1.06)}
-  /* short stem tying the label to its dot, so a dense cluster still reads as
-     pairs rather than a field of chips and dots */
-  /* Anchored at the dot's centre and tall enough to reach the chip, so its
-     lower end is hidden behind the dot — no seam at any dot size. */
-  .poi .stem{position:absolute;z-index:1;left:50%;bottom:50%;width:1.5px;height:23px;
-    margin-left:-.75px;background:rgba(255,255,255,.92);
-    transition:opacity .16s ease,visibility 0s 0s}
-  .poi.active .stem{opacity:0;visibility:hidden;transition:opacity .14s ease,visibility 0s .14s}
-  .poi .num{width:19px;height:19px;border-radius:50%;background:var(--accent);color:#fff;
+  .poi .num{width:19px;height:19px;border-radius:50%;background:var(--pin);color:#fff;
     font-size:10.5px;font-weight:700;display:grid;place-items:center;letter-spacing:-.02em;flex:none}
   .poi .lbl{font-size:12px;font-weight:650;color:var(--ink);letter-spacing:-.01em}
   /* the card names the place once it is open, so the chip would only duplicate
@@ -117,7 +134,7 @@
   #leaderLayer{position:fixed;inset:0;z-index:14;pointer-events:none;
     opacity:0;transition:opacity .22s ease}
   #leaderLayer.on{opacity:1}
-  #leaderLayer line{stroke:var(--accent);stroke-width:1.5;stroke-linecap:round}
+  #leaderLayer line{stroke:var(--pin);stroke-width:1.5;stroke-linecap:round}
 
   /* ---------- info card ---------- */
   #card{
@@ -143,6 +160,11 @@
     background:rgba(0,0,0,.28);display:grid;place-items:center;backdrop-filter:blur(6px)}
   #cardClose svg{width:13px;height:13px;stroke:#fff;stroke-width:2.2;fill:none;stroke-linecap:round}
   #cardClose:hover{background:rgba(0,0,0,.45)}
+  /* position lives with the content, the mechanism lives with the transport */
+  #cardCount{position:absolute;top:10px;left:10px;height:28px;padding:0 10px;border-radius:999px;
+    background:rgba(0,0,0,.28);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    display:grid;place-items:center;
+    font-size:11px;font-weight:650;letter-spacing:.01em;color:#fff;pointer-events:none}
   #cardBody{padding:16px 18px 18px}
   #cardTitle{font-size:19px;font-weight:700;letter-spacing:-.025em;color:var(--ink);line-height:1.2}
   #cardSub{font-size:12.5px;color:var(--muted);font-weight:550;margin-top:3px;letter-spacing:-.005em}
@@ -281,18 +303,20 @@
   .rtbtn.ai > svg{position:relative;width:42px;height:42px}
   .rtbtn.ai:hover{filter:brightness(1.04) saturate(1.08)}
 
-  #moreMenu{position:absolute;bottom:74px;right:22px;width:224px;padding:6px;pointer-events:auto;
+  #moreMenu,#moreMenuAerial{position:absolute;bottom:74px;right:22px;width:224px;padding:6px;pointer-events:auto;
     background:rgba(32,32,34,.92);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
     border:1px solid rgba(255,255,255,.10);border-radius:14px;box-shadow:0 18px 44px rgba(0,0,0,.45);
     opacity:0;visibility:hidden;transform:translateY(6px) scale(.97);transform-origin:100% 100%;
     transition:opacity .2s,transform .24s cubic-bezier(.22,1,.36,1),visibility 0s .24s}
-  #moreMenu.open{opacity:1;visibility:visible;transform:none;transition:opacity .2s,transform .24s cubic-bezier(.22,1,.36,1),visibility 0s 0s}
-  #moreMenu button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 11px;border-radius:9px;
+  #moreMenu.open,#moreMenuAerial.open{opacity:1;visibility:visible;transform:none;transition:opacity .2s,transform .24s cubic-bezier(.22,1,.36,1),visibility 0s 0s}
+  #moreMenu button,#moreMenuAerial button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 11px;border-radius:9px;
     font-size:12.5px;font-weight:600;color:#fff;letter-spacing:-.01em;text-align:left;transition:background .15s}
-  #moreMenu button:hover{background:rgba(255,255,255,.10)}
-  #moreMenu svg{width:15px;height:15px;stroke:rgba(255,255,255,.62);stroke-width:1.9;fill:none;
+  #moreMenu button:hover,#moreMenuAerial button:hover{background:rgba(255,255,255,.10)}
+  #moreMenu svg,#moreMenuAerial svg{width:15px;height:15px;stroke:rgba(255,255,255,.62);stroke-width:1.9;fill:none;
     stroke-linecap:round;stroke-linejoin:round;flex:none}
-  #moreMenu .sep{height:1px;background:rgba(255,255,255,.12);margin:5px 8px}
+  #moreMenu .sep,#moreMenuAerial .sep{height:1px;background:rgba(255,255,255,.12);margin:5px 8px}
+  /* the aerial copy is fixed rather than absolute — it lives outside #interiorUI */
+  #moreMenuAerial{position:fixed;z-index:31;bottom:74px;right:22px}
 
   /* measurement overlay */
   #measureLayer{position:absolute;inset:0;pointer-events:none}
@@ -318,10 +342,12 @@
 
   /* ---------- zoom ---------- */
   /* aerial: bottom-right, the conventional corner and free on this view */
-  #zoomAerial{position:fixed;z-index:30;right:22px;bottom:22px;
-    display:flex;flex-direction:column;gap:6px;
+  /* aerial right-hand cluster: carries the same Ask AI affordance as the tour,
+     so the entry point is present before you step inside */
+  #aerialRight{position:fixed;z-index:30;right:22px;bottom:22px;
+    display:flex;align-items:center;gap:4px;
     transition:opacity .35s,visibility 0s 0s}
-  #zoomAerial.hide{opacity:0;visibility:hidden;transition:opacity .3s,visibility 0s .3s}
+  #aerialRight.hide{opacity:0;visibility:hidden;transition:opacity .3s,visibility 0s .3s}
 
   @media (max-width:720px){
     #tools{bottom:16px;left:14px;gap:6px}
@@ -335,8 +361,10 @@
     #bottomScrim{height:132px}
     #intTop .logo{height:24px}
     #rightTools{bottom:16px;right:14px}
-    #zoomAerial{right:14px;bottom:16px}
+    #aerialRight{right:14px;bottom:16px}
+    #aerialTransport{left:14px;bottom:16px;gap:5px}
     #moreMenu{bottom:64px;right:14px}
+    #moreMenuAerial{bottom:64px;right:14px}
   }
 
   /* ---------- transition veil ---------- */
@@ -355,8 +383,8 @@
 
   /* the aerial label, hint and controls fade in only once loading finishes */
   body.loading #brandLabel,
-  body.loading #playBtn,
-  body.loading #zoomAerial,
+  body.loading #aerialTransport,
+  body.loading #aerialRight,
   body.loading #poiLayer,
   body.loading #hint{opacity:0;visibility:hidden;pointer-events:none}
 
@@ -467,7 +495,15 @@
   </svg>
 </div>
 
-<button class="iconbtn" id="playBtn" title="Pause orbit" aria-label="Pause orbit" aria-pressed="false">
+<div id="aerialTransport">
+  <button class="iconbtn" id="prevPoiBtn" title="Previous" aria-label="Previous point of interest">
+    <svg viewBox="0 0 38 38" fill="none" aria-hidden="true">
+      <path class="btn-bg" d="M0 19C0 8.50659 8.50659 0 19 0C29.4934 0 38 8.50659 38 19C38 29.4934 29.4934 38 19 38C8.50659 38 0 29.4934 0 19Z"/>
+      <path class="btn-ring" d="M19 0.5C29.2173 0.5 37.5 8.78273 37.5 19C37.5 29.2173 29.2173 37.5 19 37.5C8.78273 37.5 0.5 29.2173 0.5 19C0.5 8.78273 8.78273 0.5 19 0.5Z"/>
+      <path class="chev" d="M21.6 13.4 16 19l5.6 5.6"/>
+    </svg>
+  </button>
+  <button class="iconbtn" id="playBtn" title="Pause orbit" aria-label="Pause orbit" aria-pressed="false">
     <svg viewBox="0 0 38 38" fill="none" aria-hidden="true">
       <path class="btn-bg" d="M0 19C0 8.50659 8.50659 0 19 0C29.4934 0 38 8.50659 38 19C38 29.4934 29.4934 38 19 38C8.50659 38 0 29.4934 0 19Z"/>
       <path class="btn-ring" d="M19 0.5C29.2173 0.5 37.5 8.78273 37.5 19C37.5 29.2173 29.2173 37.5 19 37.5C8.78273 37.5 0.5 29.2173 0.5 19C0.5 8.78273 8.78273 0.5 19 0.5Z"/>
@@ -475,7 +511,15 @@
       <rect class="btn-fg ico-pause" x="20.8" y="11.5" width="3.2" height="15" rx="1.2"/>
       <path class="btn-fg ico-play" d="M15 11.6v14.8L27 19z"/>
     </svg>
-</button>
+  </button>
+  <button class="iconbtn" id="nextPoiBtn" title="Next" aria-label="Next point of interest">
+    <svg viewBox="0 0 38 38" fill="none" aria-hidden="true">
+      <path class="btn-bg" d="M0 19C0 8.50659 8.50659 0 19 0C29.4934 0 38 8.50659 38 19C38 29.4934 29.4934 38 19 38C8.50659 38 0 29.4934 0 19Z"/>
+      <path class="btn-ring" d="M19 0.5C29.2173 0.5 37.5 8.78273 37.5 19C37.5 29.2173 29.2173 37.5 19 37.5C8.78273 37.5 0.5 29.2173 0.5 19C0.5 8.78273 8.78273 0.5 19 0.5Z"/>
+      <path class="chev" d="M16.4 13.4 22 19l-5.6 5.6"/>
+    </svg>
+  </button>
+</div>
 
 <div class="ui pill" id="hint">Drag to orbit · scroll to zoom</div>
 
@@ -483,6 +527,7 @@
   <div id="cardArt">
     <div class="ph"></div>
     <img id="cardImg" alt="Interior preview" />
+    <div id="cardCount">1 of 5</div>
     <button id="cardClose"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
   </div>
   <div id="cardBody">
@@ -490,27 +535,59 @@
     <div id="cardSub">—</div>
     <div id="cardDesc">—</div>
     <button id="launch">
-      <span>Launch interior tour</span>
+      <span>Launch 3D tour</span>
     </button>
   </div>
 </div>
 
-<div id="zoomAerial">
-  <button class="iconbtn" id="zoomInA" aria-label="Zoom in">
-    <svg viewBox="0 0 38 38" fill="none" aria-hidden="true">
-      <path class="btn-bg" d="M0 19C0 8.50659 8.50659 0 19 0C29.4934 0 38 8.50659 38 19C38 29.4934 29.4934 38 19 38C8.50659 38 0 29.4934 0 19Z"/>
-      <path class="btn-ring" d="M19 0.5C29.2173 0.5 37.5 8.78273 37.5 19C37.5 29.2173 29.2173 37.5 19 37.5C8.78273 37.5 0.5 29.2173 0.5 19C0.5 8.78273 8.78273 0.5 19 0.5Z"/>
-      <rect class="btn-fg" x="17.6" y="11" width="2.8" height="16" rx="1.4"/>
-      <rect class="btn-fg" x="11" y="17.6" width="16" height="2.8" rx="1.4"/>
+<div id="aerialRight">
+  <button class="rtbtn dark" id="moreBtnAerial" aria-label="More options">
+    <svg viewBox="42 2 38 38" aria-hidden="true">
+      <path class="btn-bg" d="M42 21C42 10.5066 50.5066 2 61 2C71.4934 2 80 10.5066 80 21C80 31.4934 71.4934 40 61 40C50.5066 40 42 31.4934 42 21Z"/>
+      <path class="btn-ring" d="M61 2.5C71.2173 2.5 79.5 10.7827 79.5 21C79.5 31.2173 71.2173 39.5 61 39.5C50.7827 39.5 42.5 31.2173 42.5 21C42.5 10.7827 50.7827 2.5 61 2.5Z"/>
+      <path class="btn-fg" d="M59.333 16.0007C59.333 16.9211 60.0792 17.6673 60.9997 17.6673C61.9201 17.6673 62.6663 16.9211 62.6663 16.0007C62.6663 15.0802 61.9201 14.334 60.9997 14.334C60.0792 14.334 59.333 15.0802 59.333 16.0007Z"/>
+      <path class="btn-fg" d="M60.9997 22.6673C60.0792 22.6673 59.333 21.9211 59.333 21.0007C59.333 20.0802 60.0792 19.334 60.9997 19.334C61.9201 19.334 62.6663 20.0802 62.6663 21.0007C62.6663 21.9211 61.9201 22.6673 60.9997 22.6673Z"/>
+      <path class="btn-fg" d="M60.9997 27.6673C60.0792 27.6673 59.333 26.9211 59.333 26.0007C59.333 25.0802 60.0792 24.334 60.9997 24.334C61.9201 24.334 62.6663 25.0802 62.6663 26.0007C62.6663 26.9211 61.9201 27.6673 60.9997 27.6673Z"/>
     </svg>
   </button>
-  <button class="iconbtn" id="zoomOutA" aria-label="Zoom out">
-    <svg viewBox="0 0 38 38" fill="none" aria-hidden="true">
-      <path class="btn-bg" d="M0 19C0 8.50659 8.50659 0 19 0C29.4934 0 38 8.50659 38 19C38 29.4934 29.4934 38 19 38C8.50659 38 0 29.4934 0 19Z"/>
-      <path class="btn-ring" d="M19 0.5C29.2173 0.5 37.5 8.78273 37.5 19C37.5 29.2173 29.2173 37.5 19 37.5C8.78273 37.5 0.5 29.2173 0.5 19C0.5 8.78273 8.78273 0.5 19 0.5Z"/>
-      <rect class="btn-fg" x="11" y="17.6" width="16" height="2.8" rx="1.4"/>
+  <button class="rtbtn ai" id="aiBtnAerial" aria-label="Ask AI">
+    <span class="tip">Ask AI</span>
+    <svg viewBox="83 0 42 42" fill="none" aria-hidden="true">
+      <rect x="84" y="1" width="40" height="40" rx="20" fill="white"/>
+      <rect x="84" y="1" width="40" height="40" rx="20" stroke="url(#paint0_linear_13132_31049_ae)" stroke-width="2"/>
+      <path d="M97.8816 27.3955V12.0085C97.8816 11.5475 98.2553 11.1738 98.7163 11.1738C99.1771 11.174 99.551 11.5477 99.551 12.0085V27.3955C99.551 27.8564 99.1771 28.23 98.7163 28.2302C98.2553 28.2302 97.8816 27.8565 97.8816 27.3955ZM101.471 24.3177V14.4449C101.471 13.9839 101.844 13.6102 102.305 13.6102C102.766 13.6102 103.14 13.9839 103.14 14.4449V24.3177C103.14 24.7786 102.766 25.1523 102.305 25.1523C101.844 25.1523 101.471 24.7786 101.471 24.3177ZM94.291 21.3685V17.7796C94.291 17.3186 94.6647 16.9449 95.1257 16.9449C95.5867 16.9449 95.9604 17.3186 95.9604 17.7796V21.3685C95.9603 21.8294 95.5866 22.2032 95.1257 22.2032C94.6648 22.2032 94.2911 21.8294 94.291 21.3685ZM105.06 21.3669V17.65C105.061 17.1891 105.434 16.8153 105.895 16.8153C106.356 16.8153 106.73 17.1891 106.73 17.65V21.3669C106.73 21.8278 106.356 22.2016 105.895 22.2016C105.434 22.2016 105.06 21.8278 105.06 21.3669Z" fill="url(#paint1_linear_13132_31049_ae)"/>
+      <path d="M108.93 21.2683L108.996 21.5639C109.492 23.7651 111.211 25.4841 113.412 25.9799L113.708 26.0465L113.412 26.1131C111.211 26.609 109.492 28.3279 108.996 30.5291L108.93 30.8248L108.863 30.5291C108.367 28.3279 106.648 26.609 104.447 26.1131L104.152 26.0465L104.447 25.9799C106.648 25.4841 108.367 23.7651 108.863 21.5639L108.93 21.2683Z" fill="url(#paint2_linear_13132_31049_ae)"/>
+      <defs>
+      <linearGradient id="paint0_linear_13132_31049_ae" x1="104" y1="1" x2="104" y2="41" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EF8B37"/>
+      <stop offset="0.418269" stop-color="#E774E5"/>
+      <stop offset="1" stop-color="#4C57F6"/>
+      </linearGradient>
+      <linearGradient id="paint1_linear_13132_31049_ae" x1="100.062" y1="17.197" x2="108.649" y2="26.9781" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#579CFF"/>
+      <stop offset="0.355769" stop-color="#3847F5"/>
+      <stop offset="0.711538" stop-color="#947CC5"/>
+      <stop offset="1" stop-color="#E4A876"/>
+      </linearGradient>
+      <linearGradient id="paint2_linear_13132_31049_ae" x1="100.062" y1="17.197" x2="108.649" y2="26.9781" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#579CFF"/>
+      <stop offset="0.355769" stop-color="#3847F5"/>
+      <stop offset="0.711538" stop-color="#947CC5"/>
+      <stop offset="1" stop-color="#E4A876"/>
+      </linearGradient>
+      </defs>
     </svg>
   </button>
+</div>
+
+<!-- aerial auxiliary menu: the tour's overflow, carrying the items that still
+     mean something from above. The interior-only entries (ceiling,
+     measurements, Outside) have no aerial equivalent and are left out. -->
+<div id="moreMenuAerial">
+  <button id="amReset"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.6-6.4M3 4v5h5"/></svg> Reset view</button>
+  <button id="amFull"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg> <span id="amFullLabel">Fullscreen</span></button>
+  <div class="sep"></div>
+  <button id="amCopy"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7"/></svg> <span id="amCopyLabel">Copy link</span></button>
 </div>
 
 <div id="interiorUI">
@@ -657,7 +734,7 @@
 (function(){
 'use strict';
 
-const IDLE_RESUME_MS = 10000;   // resume autoplay after 10s of no interaction
+const IDLE_RESUME_MS = 5000;    // resume autoplay after 5s of no interaction
 
 /* ---------------------------------------------------------------- renderer */
 const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance'});
@@ -1376,7 +1453,7 @@ dom.addEventListener('wheel', e=>{
 }, {passive:false});
 // a click on empty space (not a drag) hands the view back to the auto-orbit
 dom.addEventListener('click', ev=>{
-  setMore(false);
+  setMore(false); setMoreAerial(false);
   if(measuring && rig.mode==='interior' && moved < 6){ measureAt(ev.clientX, ev.clientY); return; }
   if(rig.mode==='interior' && moved < 6 && clickSweep(ev.clientX, ev.clientY)) return;
   if(moved < 6 && rig.mode === 'aerial'){ closeCard({resume:!rig.userPaused}); }
@@ -1397,6 +1474,11 @@ addEventListener('keydown', e=>{
     if(moreMenu.classList.contains('open')) setMore(false);
     else if(measuring) setMeasuring(false);
     else exitInterior();
+  }
+  // arrows step the pins in the aerial view; the interior binds them to walking
+  if(rig.mode==='aerial' && !moreMenuAerial.classList.contains('open')){
+    if(e.key==='ArrowLeft'){  e.preventDefault(); stepPOI(-1); }
+    if(e.key==='ArrowRight'){ e.preventDefault(); stepPOI(1); }
   }
   if(rig.mode==='interior' && rig.view==='walk'){
     if(e.key==='ArrowUp'   || e.key==='w'){ nudge(); stepSweep(1); }
@@ -1420,8 +1502,9 @@ function fade(to, ms){
 }
 
 const playBtn = document.getElementById('playBtn');
+const aerialTransport = document.getElementById('aerialTransport');
 const brandLabel = document.getElementById('brandLabel');
-const zoomAerial = document.getElementById('zoomAerial');
+const aerialRight = document.getElementById('aerialRight');
 playBtn.addEventListener('pointerdown', e=>e.stopPropagation());
 
 document.getElementById('launch').addEventListener('click', e=>{
@@ -1444,10 +1527,12 @@ function zoomBy(sign, step){
     camera.updateProjectionMatrix();
   }
 }
-[['zoomInA',-1],['zoomOutA',1]].forEach(([id,sign])=>{
+// decorative in this prototype, like its interior twin: swallow the events
+// so a click on the button never reaches the orbit rig behind it
+['aiBtnAerial'].forEach(id=>{
   const el = document.getElementById(id);
   el.addEventListener('pointerdown', e=>e.stopPropagation());
-  el.addEventListener('click', e=>{ e.stopPropagation(); zoomBy(sign, 0.18); });
+  el.addEventListener('click', e=>e.stopPropagation());
 });
 
 /* Orbit playback. A deliberate pause is stickier than the automatic one: the
@@ -1475,8 +1560,9 @@ async function enterInterior(poi){
   document.getElementById('hint').style.opacity = 0;
   card.classList.remove('show');
   poiLayer.style.opacity = 0;
-  playBtn.classList.add('hide');
-  zoomAerial.classList.add('hide');
+  aerialTransport.classList.add('hide');
+  aerialRight.classList.add('hide');
+  setMoreAerial(false);
   brandLabel.classList.add('hide');
 
   // save aerial state to return to
@@ -1541,8 +1627,8 @@ async function exitInterior(){
   rig.auto = false; rig.idle = 0;
   document.getElementById('hint').style.opacity = 1;
   poiLayer.style.opacity = 1;
-  playBtn.classList.remove('hide');
-  zoomAerial.classList.remove('hide');
+  aerialTransport.classList.remove('hide');
+  aerialRight.classList.remove('hide');
   brandLabel.classList.remove('hide');
   await fade(0, 620);
 }
@@ -1722,6 +1808,48 @@ moreBtn.addEventListener('pointerdown', e=>e.stopPropagation());
 });
 moreBtn.addEventListener('click', e=>{ e.stopPropagation(); setMore(!moreMenu.classList.contains('open')); });
 moreMenu.addEventListener('pointerdown', e=>e.stopPropagation());
+
+/* ---- aerial auxiliary menu ---- */
+const moreBtnAerial  = document.getElementById('moreBtnAerial');
+const moreMenuAerial = document.getElementById('moreMenuAerial');
+function setMoreAerial(open){ moreMenuAerial.classList.toggle('open', open); }
+moreBtnAerial.addEventListener('pointerdown', e=>e.stopPropagation());
+moreBtnAerial.addEventListener('click', e=>{
+  e.stopPropagation(); setMoreAerial(!moreMenuAerial.classList.contains('open'));
+});
+moreMenuAerial.addEventListener('pointerdown', e=>e.stopPropagation());
+addEventListener('keydown', e=>{
+  if(e.key==='Escape' && moreMenuAerial.classList.contains('open')) setMoreAerial(false);
+});
+
+/* Reset goes back to the drone framing over the whole site. It writes the goal
+   state only, so the rig's own easing carries the move, and gTheta takes the
+   short way round instead of unwinding the orbit. */
+document.getElementById('amReset').addEventListener('click', e=>{
+  e.stopPropagation(); setMoreAerial(false);
+  camera.fov = AERIAL_FOV; camera.updateProjectionMatrix();
+  rig.gTarget.copy(HOME.target);
+  rig.gTheta  = nearestAngle(rig.gTheta, HOME.theta);
+  rig.gPhi    = HOME.phi;
+  rig.gRadius = HOME.radius;
+});
+document.getElementById('amFull').addEventListener('click', e=>{
+  e.stopPropagation(); setMoreAerial(false);
+  if(document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen();
+});
+addEventListener('fullscreenchange', ()=>{
+  document.getElementById('amFullLabel').textContent =
+    document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
+});
+// the label doubles as the confirmation, so the menu stays put long enough to read it
+document.getElementById('amCopy').addEventListener('click', async e=>{
+  e.stopPropagation();
+  const lbl = document.getElementById('amCopyLabel');
+  try{ await navigator.clipboard.writeText(location.href); lbl.textContent = 'Link copied'; }
+  catch(_){ lbl.textContent = 'Copy failed'; }
+  setTimeout(()=>{ setMoreAerial(false); lbl.textContent = 'Copy link'; }, 900);
+});
 document.getElementById('mmReset').addEventListener('click', e=>{
   e.stopPropagation(); setMore(false);
   camera.fov = INTERIOR_FOV; camera.updateProjectionMatrix();
@@ -1743,8 +1871,8 @@ const poiLayer = document.getElementById('poiLayer');
 POIS.forEach(p=>{
   const el = document.createElement('div');
   el.className = 'poi';
-  el.innerHTML = '<span class="halo"></span><span class="stem"></span>'
-    + '<span class="dot"></span>'
+  el.innerHTML = '<span class="halo"></span>'
+    + '<svg class="arrow" viewBox="0 0 50 76" aria-hidden="true"><path class="shape" fill-rule="evenodd" clip-rule="evenodd" d="M25.9703 2.03439L47.1251 24.1779C47.8187 24.9013 48.0329 26.2396 47.5936 27.1506L25.7755 73.4817C25.3261 74.4066 24.5892 74.4073 24.1328 73.4987L1.73758 27.2436C1.2901 26.3268 1.4947 24.9921 2.18333 24.2718L23.3619 2.04669C24.0797 1.31864 25.2454 1.32106 25.9703 2.03439Z"/></svg>'
     + '<span class="chip"><span class="num">' + p.n + '</span>'
     + '<span class="lbl">' + p.title + '</span></span>';
   el.setAttribute('aria-label', p.title);
@@ -1826,6 +1954,8 @@ function placeCardByPin(p){
 function selectPOI(p, opts){
   activePOI = p;
   POIS.forEach(q=>q.el.classList.toggle('active', q===p));
+  document.getElementById('cardCount').textContent =
+    (POIS.indexOf(p) + 1) + ' of ' + POIS.length;
   document.getElementById('cardTitle').textContent = p.title;
   document.getElementById('cardSub').textContent   = p.sub;
   document.getElementById('cardDesc').textContent  = p.desc;
@@ -1858,6 +1988,22 @@ function closeCard(opts){
 }
 document.getElementById('cardClose').addEventListener('click', e=>{ e.stopPropagation(); closeCard({resume:true}); });
 card.addEventListener('pointerdown', e=>e.stopPropagation());
+
+/* ---- step through the pins in their authored order ----
+   Reuses selectPOI, so advancing flies the orbit to the next elevation on the
+   same easing a pin click uses rather than cutting. Wraps at both ends; with
+   nothing open, next starts at the first pin and prev at the last, so the
+   cluster can begin the tour as well as continue it. */
+function stepPOI(dir){
+  const i = activePOI ? POIS.indexOf(activePOI) : (dir > 0 ? -1 : 0);
+  const n = POIS.length;
+  selectPOI(POIS[((i + dir) % n + n) % n]);
+}
+['prevPoiBtn','nextPoiBtn'].forEach((id, k)=>{
+  const el = document.getElementById(id);
+  el.addEventListener('pointerdown', e=>e.stopPropagation());
+  el.addEventListener('click', e=>{ e.stopPropagation(); stepPOI(k ? 1 : -1); });
+});
 
 /* ======================================================= INTERIOR STILLS
    Each info card shows a real render of the space its Launch button opens.

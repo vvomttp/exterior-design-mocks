@@ -737,7 +737,8 @@
 const IDLE_RESUME_MS = 5000;    // resume autoplay after 5s of no interaction
 
 /* ---------------------------------------------------------------- renderer */
-const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance'});
+const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance',
+  logarithmicDepthBuffer:true});   // six near-coplanar ground layers need the precision
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
@@ -749,7 +750,16 @@ document.body.appendChild(renderer.domElement);
 
 const AERIAL_FOV   = 46;                  // tight lens flatters the campus massing
 const INTERIOR_FOV = 60;                  // wide lens takes in a whole room
-const camera = new THREE.PerspectiveCamera(AERIAL_FOV, innerWidth/innerHeight, 0.5, 3000);
+const camera = new THREE.PerspectiveCamera(AERIAL_FOV, innerWidth/innerHeight, 4, 2400);
+/* Depth range is the other half of the z-fighting fix. Aerial wants a far
+   near-plane; walking a room wants a close one. Swapping them per mode gives
+   both a far tighter ratio than one compromise range ever could. */
+const CLIP = { aerial:[4, 2400], interior:[0.3, 400] };
+function setClip(mode){
+  const [n,f] = CLIP[mode] || CLIP.aerial;
+  if(camera.near === n && camera.far === f) return;
+  camera.near = n; camera.far = f; camera.updateProjectionMatrix();
+}
 
 /* ------------------------------------------------------------------ scenes */
 const exterior = new THREE.Scene();
@@ -779,6 +789,12 @@ const M = {
   metal:      new THREE.MeshStandardMaterial({color:0x9aa3ad, metalness:.8,  roughness:.35}),
   accent:     new THREE.MeshStandardMaterial({color:0x2f7df6, metalness:.2,  roughness:.5}),
   white:      new THREE.MeshStandardMaterial({color:0xffffff, metalness:0,   roughness:.55}),
+  // road markings only: they take a polygonOffset the 3D white trim must not
+  stripe:     new THREE.MeshStandardMaterial({color:0xf4f4f2, metalness:0,   roughness:.85}),
+  trim:       new THREE.MeshStandardMaterial({color:0xf7f6f2, metalness:0,   roughness:.6}),
+  frame:      new THREE.MeshStandardMaterial({color:0xe9e7e1, metalness:0,   roughness:.5}),
+  gutter:     new THREE.MeshStandardMaterial({color:0xdedbd4, metalness:.25, roughness:.5}),
+  brick:      new THREE.MeshStandardMaterial({color:0x9c6b58, metalness:0,   roughness:.9}),
   woodLight:  new THREE.MeshStandardMaterial({color:0xd9b98c, metalness:0,   roughness:.7}),
   woodDark:   new THREE.MeshStandardMaterial({color:0x8b6a45, metalness:0,   roughness:.75}),
   carpet:     new THREE.MeshStandardMaterial({color:0x40495a, metalness:0,   roughness:1}),
@@ -813,6 +829,27 @@ function makeSky(){
   return new THREE.Mesh(g,m);
 }
 exterior.add(makeSky());
+
+/* ---------------------------------------------------- image-based lighting
+   The materials were already lit, but nothing was reflected: `glass` at
+   metalness .85 is physically a mirror, and it was mirroring a void, so it
+   rendered as flat grey. Bake the procedural sky into a PMREM cubemap once at
+   startup and hand it to both scenes as `environment`; every rough surface
+   picks up sky bounce and every smooth one finally has something to show.
+   Built from a throwaway scene holding a second sky sphere, because the one
+   above is parented to `exterior` and PMREMGenerator wants a scene of its own. */
+const envMap = (()=>{
+  try{
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const skyScene = new THREE.Scene();
+    skyScene.add(makeSky());
+    const rt = pmrem.fromScene(skyScene, 0, 1, 3000);
+    pmrem.dispose();
+    return rt.texture;
+  } catch(err){ return null; }   // no float render targets — fall back to the old flat look
+})();
+if(envMap){ exterior.environment = envMap; interior.environment = envMap; }
+
 
 /* ------------------------------------------------------------------ lights */
 function lightRig(scene, sunPos, intensity, ambient, shadowSpan){
@@ -857,30 +894,294 @@ function slab(w,d,mat,x,y,z,rotY,parent){
   (parent||site).add(m); return m;
 }
 
-/* ground */
+/* ---------------------------------------------------------- ground stack
+   One named height per layer, spaced far enough apart to survive the depth
+   buffer, and each decal material also carries a polygonOffset so the order is
+   decided explicitly rather than left to precision. Nothing here is thick
+   enough to see from above — it is all under a unit — but it is 10x the
+   separation the layers used to have. */
+const Y = {
+  terrain: 0,      // the 900-unit base
+  lawn:   0.16,    // mown community lawn over it
+  lot:    0.34,    // per-parcel lawn
+  road:   0.52,    // asphalt
+  stripe: 0.60,    // markings on the asphalt
+  walk:   0.68,    // pavers, driveways, aprons — on top where they cross a road
+};
+[[M.grass,-1],[M.grassDark,0],[M.asphalt,-2],[M.stripe,-4],[M.paver,-3],[M.water,-2]]
+  .forEach(([m,f])=>{ if(!m) return; m.polygonOffset = true;
+    m.polygonOffsetFactor = f; m.polygonOffsetUnits = f; m.needsUpdate = true; });
+
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(900,900), M.grassDark);
 ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; site.add(ground);
-slab(460,460, M.grass, 0, .02, 0);
+slab(460,460, M.grass, 0, Y.lawn, 0);
 
 /* ---- roads: a spine with a loop and a cul-de-sac at the north end ------- */
-slab(30, 300, M.asphalt, 0, .06, 40);              // spine, running north
-slab(210, 26, M.asphalt, 0, .06, 150);             // frontage at the south
+slab(30, 300, M.asphalt, 0, Y.road, 40);            // spine, running north
+slab(210, 26, M.asphalt, 0, Y.road, 150);           // frontage at the south
 const cul = new THREE.Mesh(new THREE.CircleGeometry(46, 40), M.asphalt);
-cul.rotation.x = -Math.PI/2; cul.position.set(0, .06, -104); cul.receiveShadow = true; site.add(cul);
-slab(150, 24, M.asphalt, -104, .06, 20);           // west branch
-slab(150, 24, M.asphalt,  104, .06, 20);           // east branch
+cul.rotation.x = -Math.PI/2; cul.position.set(0, Y.road, -104); cul.receiveShadow = true; site.add(cul);
+slab(150, 24, M.asphalt, -104, Y.road, 20);         // west branch
+slab(150, 24, M.asphalt,  104, Y.road, 20);         // east branch
 // centre lines
-for(let z=-70;z<170;z+=20) slab(1.1, 9, M.white, 0, .09, z);
-for(let x=-170;x<170;x+=20) slab(9, 1.1, M.white, x, .09, 150);
+for(let z=-70;z<170;z+=20) slab(1.1, 9, M.stripe, 0, Y.stripe, z);
+for(let x=-170;x<170;x+=20) slab(9, 1.1, M.stripe, x, Y.stripe, 150);
 
-/* ---- one house, parameterised ------------------------------------------
-   Rotation faces the front door toward the street; `story` gives a taller
-   two-storey mass, and the palette varies so the community doesn't read as
-   twelve copies of the same object. */
+/* ---- curbs -------------------------------------------------------------
+   Real height where the asphalt meets the lawn. This is what stops the roads
+   reading as paint on grass, and it gives the sun an edge to cast off. */
+const CURB_H = 0.5, CURB_W = 0.9;
+function curbRun(len, x, z, alongZ){
+  const w = alongZ ? CURB_W : len, dd = alongZ ? len : CURB_W;
+  const m = box(w, CURB_H, dd, M.concrete, x, Y.road + CURB_H/2 - .06, z);
+  m.castShadow = false;   // a 0.5-unit lip does not need to be in the shadow map
+  return m;
+}
+// spine, both sides, broken where the branches and the cul-de-sac meet it
+for(const sx of [-15.45, 15.45]){
+  curbRun(118, sx, 131, true);    // north of the frontage down to the west/east branches
+  curbRun(96,  sx, 4,   true);
+}
+// frontage road
+for(const sz of [150 - 13.45, 150 + 13.45]) curbRun(210, 0, sz, false);
+// branches
+for(const bx of [-104, 104]){
+  for(const sz of [20 - 12.45, 20 + 12.45]) curbRun(150, bx, sz, false);
+}
+// cul-de-sac: a flat torus is exactly the right primitive for a circular curb
+const culCurb = new THREE.Mesh(new THREE.TorusGeometry(46.4, CURB_H/2, 5, 56), M.concrete);
+culCurb.rotation.x = Math.PI/2; culCurb.position.set(0, Y.road + CURB_H/2 - .06, -104);
+culCurb.receiveShadow = true; site.add(culCurb);
+
 const SIDING = [0xe8e2d6, 0xd8dbd6, 0xcfd6dc, 0xe4d8c8, 0xd2cec6, 0xdfe3e6];
 const ROOFS  = [0x5c5a57, 0x6b5f52, 0x4f5b62, 0x726257, 0x585f5c];
 const sidingMats = SIDING.map(c=> new THREE.MeshStandardMaterial({color:c, roughness:.85}));
 const roofMats   = ROOFS.map(c=> new THREE.MeshStandardMaterial({color:c, roughness:.7, flatShading:true}));
+
+/* ==================================================== PROCEDURAL TEXTURES
+   Every surface here used to be a single flat colour, which is what made the
+   site read as a diagram rather than a place. These maps are drawn on canvas
+   at runtime — no asset files, no fetch, so the page still opens by
+   double-click — and the normal maps are derived from the same canvases with a
+   Sobel pass, so relief always agrees with the pattern that produced it.
+
+   Albedo gets sRGBEncoding; normal and roughness maps are raw data and must
+   not, or the lighting goes soft and wrong. */
+
+const MAXA = renderer.capabilities.getMaxAnisotropy();
+
+function canvasOf(w, h, draw){
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  return c;
+}
+
+function texOf(canvas, rx, ry, srgb){
+  const t = new THREE.CanvasTexture(canvas);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(rx, ry);
+  t.anisotropy = MAXA;
+  if(srgb) t.encoding = THREE.sRGBEncoding;
+  return t;
+}
+
+/* Sobel over luminance → tangent-space normals. Cheap, and it means a texture
+   and its relief can never drift apart. */
+function normalOf(canvas, strength, rx, ry){
+  const w = canvas.width, h = canvas.height;
+  const src = canvas.getContext('2d').getImageData(0,0,w,h).data;
+  const lum = new Float32Array(w*h);
+  for(let i=0;i<w*h;i++) lum[i] = (src[i*4]*0.299 + src[i*4+1]*0.587 + src[i*4+2]*0.114)/255;
+  const out = canvasOf(w, h, (ctx)=>{
+    const img = ctx.createImageData(w,h);
+    const at = (x,y)=> lum[((y+h)%h)*w + ((x+w)%w)];
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+      const dx = (at(x+1,y-1) + 2*at(x+1,y) + at(x+1,y+1))
+               - (at(x-1,y-1) + 2*at(x-1,y) + at(x-1,y+1));
+      const dy = (at(x-1,y+1) + 2*at(x,y+1) + at(x+1,y+1))
+               - (at(x-1,y-1) + 2*at(x,y-1) + at(x+1,y-1));
+      let nx = -dx*strength, ny = -dy*strength, nz = 1;
+      const l = Math.hypot(nx,ny,nz); nx/=l; ny/=l; nz/=l;
+      const i = (y*w+x)*4;
+      img.data[i]   = (nx*0.5+0.5)*255;
+      img.data[i+1] = (ny*0.5+0.5)*255;
+      img.data[i+2] = (nz*0.5+0.5)*255;
+      img.data[i+3] = 255;
+    }
+    ctx.putImageData(img,0,0);
+  });
+  return texOf(out, rx, ry, false);
+}
+
+// value noise, tiling by construction so nothing seams at the repeat
+function grain(ctx, w, h, n, min, max, alpha){
+  for(let i=0;i<n;i++){
+    const r = min + Math.random()*(max-min);
+    ctx.globalAlpha = alpha * (0.35 + Math.random()*0.65);
+    ctx.fillStyle = Math.random() < .5 ? '#000' : '#fff';
+    const x = Math.random()*w, y = Math.random()*h;
+    for(const [ox,oy] of [[0,0],[w,0],[-w,0],[0,h],[0,-h]]){
+      ctx.beginPath(); ctx.arc(x+ox, y+oy, r, 0, 6.2832); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ---- horizontal lap siding: boards with a shadow line under each course --- */
+function sidingCanvas(hex){
+  return canvasOf(256, 256, (ctx,w,h)=>{
+    ctx.fillStyle = hex; ctx.fillRect(0,0,w,h);
+    const course = 16;
+    for(let y=0;y<h;y+=course){
+      ctx.fillStyle = 'rgba(0,0,0,.16)';           // reveal at the board lap
+      ctx.fillRect(0, y+course-2, w, 2);
+      ctx.fillStyle = 'rgba(255,255,255,.05)';     // light catch just below it
+      ctx.fillRect(0, y+course, w, 1);
+      ctx.fillStyle = 'rgba(0,0,0,' + (0.012 + Math.random()*0.02).toFixed(3) + ')';
+      ctx.fillRect(0, y, w, course-2);             // per-board tone variance
+    }
+    grain(ctx, w, h, 260, .4, 1.6, .05);
+  });
+}
+
+/* ---- asphalt shingles: staggered courses, tabs, weathered per-tab tone ---- */
+function shingleCanvas(hex){
+  return canvasOf(256, 256, (ctx,w,h)=>{
+    ctx.fillStyle = hex; ctx.fillRect(0,0,w,h);
+    const ch = 22, tw = 34;
+    for(let row=0, y=0; y<h+ch; row++, y+=ch){
+      const off = (row % 2) ? tw/2 : 0;
+      for(let x=-tw; x<w+tw; x+=tw){
+        ctx.fillStyle = 'rgba(0,0,0,' + (0.05 + Math.random()*0.11).toFixed(3) + ')';
+        ctx.fillRect(x+off, y, tw-2, ch-3);
+        ctx.fillStyle = 'rgba(0,0,0,.30)';         // keyway between tabs
+        ctx.fillRect(x+off+tw-2, y, 2, ch-3);
+      }
+      ctx.fillStyle = 'rgba(0,0,0,.34)';           // butt-edge shadow
+      ctx.fillRect(0, y+ch-3, w, 3);
+    }
+    grain(ctx, w, h, 900, .3, 1.1, .12);           // mineral granules
+  });
+}
+
+function flatCanvas(hex, n, min, max, alpha, extra){
+  return canvasOf(256, 256, (ctx,w,h)=>{
+    ctx.fillStyle = hex; ctx.fillRect(0,0,w,h);
+    if(extra) extra(ctx,w,h);
+    grain(ctx, w, h, n, min, max, alpha);
+  });
+}
+
+const hex = n => '#' + n.toString(16).padStart(6,'0');
+
+// siding + roofs, one map per palette entry
+SIDING.forEach((c,i)=>{
+  const cv = sidingCanvas(hex(c));
+  sidingMats[i].map         = texOf(cv, 4, 3, true);
+  sidingMats[i].normalMap   = normalOf(cv, 2.2, 4, 3);
+  sidingMats[i].normalScale = new THREE.Vector2(.7,.7);
+  sidingMats[i].envMapIntensity = .85;
+  sidingMats[i].needsUpdate = true;
+});
+ROOFS.forEach((c,i)=>{
+  const cv = shingleCanvas(hex(c));
+  roofMats[i].map          = texOf(cv, 3, 3, true);
+  roofMats[i].normalMap    = normalOf(cv, 3.0, 3, 3);
+  roofMats[i].normalScale  = new THREE.Vector2(1,1);
+  roofMats[i].flatShading  = false;   // the shingle relief now does this job better
+  roofMats[i].envMapIntensity = .7;
+  roofMats[i].needsUpdate  = true;
+});
+
+/* ---- ground planes carry the most screen area, so they matter most ------- */
+function dress(mat, canvas, rx, ry, nStrength, envI){
+  mat.map = texOf(canvas, rx, ry, true);
+  mat.normalMap = normalOf(canvas, nStrength, rx, ry);
+  mat.normalScale = new THREE.Vector2(.6,.6);
+  if(envI != null) mat.envMapIntensity = envI;
+  mat.needsUpdate = true;
+}
+
+dress(M.grass,     flatCanvas('#7fa25c', 1400, .5, 2.4, .16), 90, 90, 1.4, .8);
+dress(M.grassDark, flatCanvas('#6b8d4c', 1400, .5, 2.4, .16), 140, 140, 1.4, .8);
+dress(M.asphalt,   flatCanvas('#50555c', 1800, .3, 1.3, .18), 26, 26, 1.1, .55);
+dress(M.concrete,  flatCanvas('#c3c6c9', 900, .4, 1.8, .07), 22, 22, .9, .8);
+dress(M.stone,     flatCanvas('#dcd8d0', 700, .5, 2.0, .06), 6, 6, .9, .8);
+dress(M.stoneDark, flatCanvas('#b8b3aa', 700, .5, 2.0, .06), 6, 6, .9, .8);
+
+// pavers keep their joints, so they get a grid rather than pure noise
+dress(M.paver, flatCanvas('#d7cfc2', 300, .4, 1.4, .05, (ctx,w,h)=>{
+  ctx.strokeStyle = 'rgba(0,0,0,.20)'; ctx.lineWidth = 2;
+  for(let i=0;i<=w;i+=32){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,h); ctx.stroke(); }
+  for(let j=0;j<=h;j+=32){ ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(w,j); ctx.stroke(); }
+}), 14, 14, 1.6, .8);
+
+/* Glass and metal were the worst offenders without a cubemap — push their
+   contribution up now that there is one to sample. */
+[M.glass, M.glassDark].forEach(m=>{ m.envMapIntensity = 1.5; m.needsUpdate = true; });
+M.metal.envMapIntensity = 1.25;
+M.water.envMapIntensity = 1.6;
+M.spandrel.envMapIntensity = .9;
+
+/* The sky is now doing part of the ambient job, so pull the hemisphere light
+   back to keep the overall exposure where it was. */
+exterior.traverse(o=>{ if(o.isHemisphereLight) o.intensity *= 0.72; });
+
+/* ---- one house, parameterised ------------------------------------------
+   Built as assemblies rather than primitives: the mass carries corner boards,
+   the openings are recessed behind proud frames and sills so the sun draws a
+   reveal line, and the roof has a real edge with fascia and gutter. Only the
+   large masses go into the shadow map — trim at this scale would cost more than
+   it shows. */
+/* ---- hip roof -----------------------------------------------------------
+   Two trapezoids and two triangles meeting at a ridge, sized to the wall plan
+   plus an overhang. Winding is decided per triangle against an outward
+   reference vector, so the normals can't come out inverted. UVs are a planar
+   projection from above: shingle courses stay continuous across the hips, and
+   1 unit of plan maps to a consistent share of the texture on every face. */
+function hipRoof(w, d, oh, h, mat){
+  const W = w + oh*2, D = d + oh*2;
+  const pos = [], uv = [];
+  const V = (x,y,z)=> new THREE.Vector3(x,y,z);
+  const UVS = 14;   // plan units per texture tile
+
+  function tri(a, b, c, out){
+    const n = new THREE.Vector3().subVectors(b,a).cross(new THREE.Vector3().subVectors(c,a));
+    if(n.dot(out) < 0){ const t = b; b = c; c = t; }
+    for(const p of [a,b,c]){ pos.push(p.x, p.y, p.z); uv.push(p.x/UVS, p.z/UVS); }
+  }
+  // on a square plan the ridge collapses to a point and the roof is a true
+  // pyramid, so the second triangle of each long face would be degenerate
+  function quad(a, b, c, dd, out){
+    tri(a,b,c,out);
+    if(c.distanceToSquared(dd) > 1e-6) tri(a,c,dd,out);
+  }
+
+  if(W >= D){                        // ridge runs along x
+    const r = (W - D)/2;
+    const ridgeA = V(-r, h, 0), ridgeB = V(r, h, 0);
+    quad(V(-W/2,0, D/2), V(W/2,0, D/2), ridgeB, ridgeA, V(0,.55, 1));
+    quad(V( W/2,0,-D/2), V(-W/2,0,-D/2), ridgeA, ridgeB, V(0,.55,-1));
+    tri(V( W/2,0, D/2), V( W/2,0,-D/2), ridgeB, V( 1,.55,0));
+    tri(V(-W/2,0,-D/2), V(-W/2,0, D/2), ridgeA, V(-1,.55,0));
+  } else {                           // ridge runs along z
+    const r = (D - W)/2;
+    const ridgeA = V(0, h, -r), ridgeB = V(0, h, r);
+    quad(V( W/2,0,-D/2), V( W/2,0, D/2), ridgeB, ridgeA, V( 1,.55,0));
+    quad(V(-W/2,0, D/2), V(-W/2,0,-D/2), ridgeA, ridgeB, V(-1,.55,0));
+    tri(V( W/2,0, D/2), V(-W/2,0, D/2), ridgeB, V(0,.55, 1));
+    tri(V(-W/2,0,-D/2), V( W/2,0,-D/2), ridgeA, V(0,.55,-1));
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv',       new THREE.Float32BufferAttribute(uv, 2));
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, mat);
+  m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
 
 function house(cfg){
   const g = new THREE.Group();
@@ -893,41 +1194,132 @@ function house(cfg){
   const siding = sidingMats[cfg.pal % sidingMats.length];
   const roof   = roofMats[cfg.pal % roofMats.length];
 
-  // parcel: lawn, driveway, walk
-  slab(w+26, d+34, M.grass, 0, .05, 2, 0, g);
-  slab(9, 30, M.paver, -w/2+3, .09, d/2+16, 0, g);      // driveway to the street
-  slab(3.4, 12, M.paver, 3, .10, d/2+7, 0, g);          // front walk
+  // detail helper: same as box(), minus the shadow-map cost
+  const trim = (bw,bh,bd,mat,x,y,z)=>{
+    const m = box(bw,bh,bd,mat,x,y,z,g); m.castShadow = false; return m;
+  };
 
-  // main mass
-  const body = box(w, wallH, d, siding, 0, wallH/2, 0, g);
+  // parcel: lawn, driveway, walk
+  slab(w+26, d+34, M.grass, 0, Y.lot, 2, 0, g);
+  slab(9, 30, M.paver, -w/2+3, Y.walk, d/2+16, 0, g);   // driveway to the street
+  slab(3.4, 12, M.paver, 3, Y.walk+.02, d/2+7, 0, g);   // front walk
+
+  /* ---- foundation: the house needs to sit on something -------------------- */
+  trim(w+.9, 1.5, d+.9, M.concrete, 0, .75, 0);
+
+  /* ---- main mass --------------------------------------------------------- */
+  const body = box(w, wallH, d, siding, 0, wallH/2 + 1.4, 0, g);
   occluders.push(body);
 
-  // hipped roof: a squashed pyramid reads well at aerial distance
-  const rf = new THREE.Mesh(new THREE.ConeGeometry(Math.hypot(w,d)/2*1.02, 5.6, 4), roof);
-  rf.rotation.y = Math.PI/4; rf.position.y = wallH + 2.8; rf.castShadow = true; g.add(rf);
-  occluders.push(rf);
-  box(w+1.6, .5, d+1.6, roof, 0, wallH+.25, 0, g);      // eaves
+  // corner boards: the cheapest way to stop a box reading as one extrusion
+  for(const sx of [-1, 1]) for(const sz of [-1, 1])
+    trim(.55, wallH, .55, M.trim, sx*(w/2-.1), wallH/2 + 1.4, sz*(d/2-.1));
 
-  // garage wing
-  const gw = box(11, 6.6, 11, siding, -w/2-4.5, 3.3, d/2-4, g);
-  occluders.push(gw);
-  const grf = new THREE.Mesh(new THREE.ConeGeometry(8.2, 3.4, 4), roof);
-  grf.rotation.y = Math.PI/4; grf.position.set(-w/2-4.5, 8.2, d/2-4); grf.castShadow = true; g.add(grf);
-  box(7.6, 4.6, .4, M.stoneDark, -w/2-4.5, 2.3, d/2+1.7, g);   // garage door
+  // storey band on the two-storey plans, where the floor line would be
+  if(story === 2) trim(w+.3, .45, d+.3, M.trim, 0, 1.4 + 7.0, 0);
 
-  // porch + door + windows on the street face
-  box(11, .4, 5, M.white, 3, 6.9, d/2+2.4, g);
-  for(const px of [-1.4, 7.4]){
-    const c = new THREE.Mesh(new THREE.CylinderGeometry(.26,.26,6.6,10), M.white);
-    c.position.set(px, 3.3, d/2+4.6); c.castShadow = true; g.add(c);
+  /* ---- windows: recessed glass, proud frame, projecting sill -------------
+     The glass used to stand 0.15 outside the wall, which is why it read as a
+     sticker. Now it sits behind the plane and the frame casts onto it. */
+  function opening(cx, cy, ww, wh, face){
+    const z = face * (d/2);
+    const inset = .30;
+    trim(ww, wh, .12, M.glassDark, cx, cy, z - face*inset);        // glazing, set back
+    trim(ww+.9, .34, .30, M.frame, cx, cy + wh/2 + .17, z);        // head
+    trim(ww+.9, .30, .46, M.frame, cx, cy - wh/2 - .15, z + face*.06); // sill, projecting
+    for(const sx of [-1, 1])
+      trim(.34, wh, .30, M.frame, cx + sx*(ww/2 + .28), cy, z);    // jambs
+    trim(.16, wh*.96, .16, M.frame, cx, cy, z - face*(inset-.12)); // centre muntin
   }
-  box(3.4, 5.4, .35, M.woodDark, 3, 2.7, d/2+.2, g);           // front door
-  for(const px of [-6.5, 9.6]) box(3.4, 3.4, .3, M.glassDark, px, 4.2, d/2+.2, g);
-  if(story === 2)
-    for(const px of [-6.5, 1.5, 9.6]) box(3.2, 3.2, .3, M.glassDark, px, 9.6, d/2+.2, g);
 
-  // back patio
-  slab(w-2, 9, M.paver, 0, .09, -d/2-5, 0, g);
+  const yFront = 1.4;
+  for(const px of [-6.5, 9.6]) opening(px, yFront + 4.2, 3.4, 3.4, 1);
+  if(story === 2) for(const px of [-6.5, 1.5, 9.6]) opening(px, yFront + 9.6, 3.2, 3.2, 1);
+  // side and rear elevations, so the house isn't a facade with three blank walls
+  for(const sz of [-1, 1]){
+    if(sz === -1) for(const px of [-5, 5]) opening(px, yFront + 4.2, 3.0, 3.2, -1);
+  }
+
+  /* ---- front door with casing -------------------------------------------- */
+  trim(3.4, 5.4, .35, M.woodDark, 3, yFront + 2.7, d/2 + .2);
+  trim(4.3, .40, .52, M.trim, 3, yFront + 5.55, d/2 + .26);       // head casing
+  for(const sx of [-1, 1]) trim(.42, 5.6, .5, M.trim, 3 + sx*2.05, yFront + 2.8, d/2 + .24);
+  trim(4.6, .35, 1.9, M.concrete, 3, yFront - .1, d/2 + 1.3);     // stoop
+
+  /* ---- hipped roof, with an edge ---------------------------------------- */
+  const OH = 1.5;                            // eave overhang, all four sides
+  const eaveY = wallH + 1.4;
+  const rf = hipRoof(w, d, OH, story === 2 ? 6.0 : 5.2, roof);
+  rf.position.y = eaveY + .62;               // sits on top of the fascia band
+  g.add(rf);
+  occluders.push(rf);
+
+  // eave assembly: fascia band at the roof edge, soffit closing it underneath
+  const fas = box(w + OH*2, .62, d + OH*2, roof, 0, eaveY + .31, 0, g);
+  fas.castShadow = true;
+  trim(w + OH*2 - .1, .3, d + OH*2 - .1, M.trim, 0, eaveY - .01, 0);   // soffit
+  for(const sz of [-1, 1]){
+    const gut = new THREE.Mesh(new THREE.CylinderGeometry(.20,.20, w + OH*2, 8), M.gutter);
+    gut.rotation.z = Math.PI/2; gut.position.set(0, eaveY + .04, sz*(d/2 + OH - .1));
+    g.add(gut);
+  }
+  // downspouts at the front corners
+  for(const sx of [-1, 1]){
+    const dsp = new THREE.Mesh(new THREE.CylinderGeometry(.16,.16, wallH + 1.2, 6), M.gutter);
+    dsp.position.set(sx*(w/2 - .1), (wallH + 1.2)/2 + 1.0, d/2 + OH - .3); g.add(dsp);
+  }
+
+  // chimney on some plans — pure silhouette value for four boxes
+  if(cfg.pal % 2 === 0){
+    const ch = box(2.6, story === 2 ? 8.0 : 6.4, 2.2, M.brick,
+                   -w/2 + 4.5, wallH + 1.4 + (story === 2 ? 2.2 : 1.4), -d/4, g);
+    ch.castShadow = true;
+    trim(3.1, .4, 2.7, M.concrete, -w/2 + 4.5,
+         wallH + 1.4 + (story === 2 ? 6.4 : 4.8), -d/4);            // cap
+  }
+
+  /* ---- garage wing ------------------------------------------------------- */
+  const gw = box(11, 6.6, 11, siding, -w/2-4.5, 3.3 + 1.0, d/2-4, g);
+  occluders.push(gw);
+  trim(11.4, 1.1, 11.4, M.concrete, -w/2-4.5, .55, d/2-4);          // its own footing
+  for(const sx of [-1, 1]) for(const sz of [-1, 1])
+    trim(.5, 6.6, .5, M.trim, -w/2-4.5 + sx*5.4, 4.3, d/2-4 + sz*5.4);
+  const gEaveY = 6.6 + 1.0;
+  const grf = hipRoof(11, 11, 1.2, 3.2, roof);
+  grf.position.set(-w/2-4.5, gEaveY + .5, d/2-4); g.add(grf);
+  const gfas = box(11 + 2.4, .5, 11 + 2.4, roof, -w/2-4.5, gEaveY + .25, d/2-4, g);
+  gfas.castShadow = true;
+  trim(11 + 2.3, .26, 11 + 2.3, M.trim, -w/2-4.5, gEaveY - .01, d/2-4);   // soffit
+
+  // garage door: recessed, with panel courses
+  trim(7.6, 4.6, .3, M.stoneDark, -w/2-4.5, 3.3, d/2+1.5);
+  for(let i=0;i<4;i++)
+    trim(7.2, .12, .1, M.concrete, -w/2-4.5, 1.5 + i*1.05, d/2+1.68);
+  trim(8.4, .42, .55, M.trim, -w/2-4.5, 5.75, d/2+1.62);            // door head
+  for(const sx of [-1, 1]) trim(.42, 4.8, .55, M.trim, -w/2-4.5 + sx*4.0, 3.3, d/2+1.62);
+
+  /* ---- porch: deck, columns with base and cap, beam, railing ------------- */
+  trim(11.5, .45, 5.4, M.concrete, 3, yFront - .18, d/2 + 2.6);     // deck
+  const porchRoofY = yFront + 5.9;
+  const pr = box(12, .42, 6.0, roof, 3, porchRoofY, d/2 + 2.7, g);
+  pr.castShadow = true;
+  const phip = hipRoof(11.2, 5.2, .4, 1.1, roof);
+  phip.position.set(3, porchRoofY + .21, d/2 + 2.7); g.add(phip);
+  trim(12.4, .40, 6.4, M.trim, 3, porchRoofY - .38, d/2 + 2.7);     // its soffit
+  trim(12, .34, .34, M.trim, 3, porchRoofY - .62, d/2 + 5.6);       // beam at the front
+  for(const px of [-1.4, 7.4]){
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(.26,.26,5.4,10), M.white);
+    c.position.set(px, yFront + 2.7, d/2+4.6); c.castShadow = true; g.add(c);
+    trim(.78, .34, .78, M.trim, px, yFront + .12, d/2+4.6);         // base
+    trim(.72, .30, .72, M.trim, px, yFront + 5.5, d/2+4.6);         // cap
+  }
+  // railing between the columns, on the open side only
+  trim(8.6, .22, .22, M.white, 3, yFront + 2.5, d/2+4.6);
+  for(let bx = -0.6; bx <= 6.8; bx += 1.05)
+    trim(.13, 2.3, .13, M.white, bx, yFront + 1.3, d/2+4.6);
+
+  /* ---- back patio -------------------------------------------------------- */
+  slab(w-2, 9, M.paver, 0, Y.walk, -d/2-5, 0, g);
   return g;
 }
 
@@ -955,15 +1347,16 @@ HOMES.forEach(h=>house(h));
 /* ---- pocket park, west branch ------------------------------------------ */
 (function park(){
   const g = new THREE.Group(); g.position.set(-116, 0, 74); site.add(g);
-  slab(74, 66, M.grass, 0, .06, 0, 0, g);
+  slab(74, 66, M.grass, 0, Y.lot, 0, 0, g);
   const pond = new THREE.Mesh(new THREE.CircleGeometry(15, 32), M.water);
   pond.rotation.x = -Math.PI/2; pond.position.set(6, .12, -4); g.add(pond);
   const rim = new THREE.Mesh(new THREE.RingGeometry(15, 17.4, 32), M.stoneDark);
+  rim.renderOrder = 1;   // sits over the pond edge rather than fighting it
   rim.rotation.x = -Math.PI/2; rim.position.set(6, .10, -4); g.add(rim);
   // path looping the pond
   for(let i=0;i<26;i++){
     const a = i/26*Math.PI*2;
-    slab(5.6, 5.6, M.paver, 6+Math.cos(a)*25, .08, -4+Math.sin(a)*23, a, g);
+    slab(5.6, 5.6, M.paver, 6+Math.cos(a)*25, Y.walk, -4+Math.sin(a)*23, a, g);
   }
   // benches + play structure
   for(let i=0;i<5;i++){
@@ -980,7 +1373,7 @@ HOMES.forEach(h=>house(h));
 /* ---- amenity pool, east branch ----------------------------------------- */
 (function amenity(){
   const g = new THREE.Group(); g.position.set(120, 0, 60); site.add(g);
-  slab(72, 62, M.paver, 0, .06, 0, 0, g);
+  slab(72, 62, M.paver, 0, Y.walk, 0, 0, g);
   // pool
   const water = box(30, .6, 17, M.water, -2, .5, -6, g);
   box(34, 1.1, 21, M.stone, -2, .3, -6, g);
@@ -1517,6 +1910,7 @@ async function enterInterior(poi){
   tour.cfg = cfg; tour.i = 0;
   rig.mode = 'interior';
   rig.view = 'walk';
+  setClip('interior');
   camera.fov = INTERIOR_FOV; camera.updateProjectionMatrix();
   markView('walk');
   setMeasuring(false);
@@ -1551,6 +1945,7 @@ async function exitInterior(){
   intUI.classList.remove('show');
   await fade(1, 460);
   activeScene = exterior;
+  setClip('aerial');
   camera.fov = AERIAL_FOV; camera.updateProjectionMatrix();
   clearInterior();
   tour.cfg = null;
@@ -1984,6 +2379,8 @@ function shootPreviews(){
     const p = queue.shift();
     const cfg = INTERIORS[p.interior] || INTERIORS.lobby;
     const view = p.preview || cfg.hero || cfg.stops[0];
+    const heldEnv = interior.environment;
+    interior.environment = null;   // belongs to the main context, not this one
     try{
       clearInterior();
       cfg.build();
@@ -1993,6 +2390,7 @@ function shootPreviews(){
       previews[p.id] = shot.domElement.toDataURL('image/jpeg', 0.86);
       if(activePOI && activePOI.id === p.id) paintCardArt(p);   // card already open
     } catch(err){ /* skip this preview, keep the wash */ }
+    finally{ interior.environment = heldEnv; }
     clearInterior();
     setTimeout(step, 90);
   })();
