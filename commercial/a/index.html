@@ -83,49 +83,55 @@
        pointer-events:auto;cursor:pointer;width:26px;height:40px;
        transition:opacity .28s ease;will-change:left,top}
 
-  /* Three ordered steps rather than two: neutral at rest, a brand tint under
-     the cursor, full LoopNet red once chosen. Colour is what marks the
-     selection, so hover deliberately stops short of it. */
+  /* Brand at rest, so the markers carry the palette the whole time.
+     Hover deepens it, and the chosen pin inverts to white with a brand
+     outline — the largest change, reserved for the largest state. */
   .poi .arrow{position:relative;z-index:2;display:block;width:26px;height:40px;
     filter:drop-shadow(0 3px 6px rgba(9,16,30,.45));
     transform-origin:50% 96%;   /* scale about the tip, so the point never drifts */
     transition:transform .18s cubic-bezier(.34,1.56,.64,1)}
-  /* #EAEAEA is the stroke the source asset shipped with — it holds an edge
-     over pale roofs and paving where a white-on-white outline disappears */
-  .poi .arrow .shape{fill:#fff;stroke:#EAEAEA;stroke-width:3;
+  /* a white keyline rather than the asset's #EAEAEA: against grass, asphalt
+     and roof tile the brand fill needs the harder edge to stay legible */
+  .poi .arrow .shape{fill:var(--pin);stroke:#fff;stroke-width:3;
     transition:fill .18s ease,stroke .18s ease}
 
   .poi:hover .arrow{transform:translateY(-2px) scale(1.06)}
-  .poi:hover .arrow .shape{fill:var(--pin-tint);stroke:var(--pin)}
+  .poi:hover .arrow .shape{fill:var(--pin-deep)}
 
-  .poi.active .arrow{transform:scale(1.14)}
-  .poi.active .arrow .shape{fill:var(--pin);stroke:#fff}
+  /* Chosen stays brand-filled — size, a heavier keyline and the halo carry the
+     state instead of a colour flip, so the selected pin reads as "more of the
+     same thing" rather than a different kind of marker. Declared after the
+     hover rules at equal specificity, so it holds while hovered too. */
+  .poi.active .arrow{transform:scale(1.3);
+    filter:drop-shadow(0 5px 10px rgba(9,16,30,.5))}
+  .poi.active .arrow .shape{fill:var(--pin);stroke:#fff;stroke-width:3.6}
 
   /* Ring on the ground at the tip, so the chosen pin still reads once its
      label has stepped aside for the card. */
   .poi .halo{position:absolute;z-index:0;left:50%;bottom:0;width:26px;height:26px;
     margin:0 0 -13px -13px;border-radius:50%;
-    border:1.5px solid var(--pin);opacity:0;transform:scale(.6);
+    border:2px solid var(--pin);opacity:0;transform:scale(.6);
     transition:opacity .22s,transform .3s cubic-bezier(.34,1.56,.64,1)}
-  .poi.active .halo{opacity:.75;transform:scale(1)}
+  .poi.active .halo{opacity:.9;transform:scale(1.3)}
 
-  /* Unselected: the labelled chip above the marker. Selected: chip out of the
-     way, leaving the arrow and a leader line to the card beside it. The old
-     stem is gone — the arrow points at its own target now. */
+  /* The label is on demand: markers alone until you point at one, so a dense
+     cluster reads as pins rather than a wall of chips. It stays down for the
+     selected pin too, where the open card already names the place. */
   .poi .chip{position:absolute;bottom:calc(100% + 8px);left:50%;
     display:flex;align-items:center;gap:8px;padding:6px 12px 6px 7px;border-radius:999px;
     background:rgba(255,255,255,.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
     border:1px solid rgba(255,255,255,.75);box-shadow:var(--shadow-sm);white-space:nowrap;
-    transform:translateX(-50%);transform-origin:50% 130%;
-    transition:opacity .18s ease,transform .2s cubic-bezier(.34,1.56,.64,1),visibility 0s 0s}
-  .poi:hover .chip{transform:translateX(-50%) scale(1.06)}
+    transform:translateX(-50%) scale(.94);transform-origin:50% 130%;
+    opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .16s ease,transform .18s cubic-bezier(.34,1.56,.64,1),visibility 0s .16s}
+  .poi:hover .chip{opacity:1;visibility:visible;transform:translateX(-50%) scale(1);
+    transition:opacity .16s ease,transform .18s cubic-bezier(.34,1.56,.64,1),visibility 0s 0s}
   .poi .num{width:19px;height:19px;border-radius:50%;background:var(--pin);color:#fff;
     font-size:10.5px;font-weight:700;display:grid;place-items:center;letter-spacing:-.02em;flex:none}
   .poi .lbl{font-size:12px;font-weight:650;color:var(--ink);letter-spacing:-.01em}
-  /* the card names the place once it is open, so the chip would only duplicate
-     it and sit under it */
-  .poi.active .chip{opacity:0;visibility:hidden;pointer-events:none;
-    transform:translateX(-50%) scale(.9);transition:opacity .16s ease,transform .16s,visibility 0s .16s}
+  /* hovering the selected pin must not bring its label back over the card */
+  .poi.active:hover .chip{opacity:0;visibility:hidden;
+    transform:translateX(-50%) scale(.94);transition:opacity .14s ease,visibility 0s .14s}
   .poi.occluded{opacity:.22}
   .poi.hidden{opacity:0;pointer-events:none}
 
@@ -170,13 +176,28 @@
   #cardSub{font-size:12.5px;color:var(--muted);font-weight:550;margin-top:3px;letter-spacing:-.005em}
   #cardDesc{font-size:12.5px;line-height:1.55;color:#3c4a5e;margin-top:10px;
     padding-bottom:2px;border-bottom:1px solid var(--line)}
+  /* Same surface as the interior toolbar and the Outside pill: 38px, fully
+     rounded, hairline ring, 12.5/650 label with a chevron. Opaque rather than
+     70% translucent, because this one sits on solid white paper instead of the
+     3D scene, where the translucency would wash out to mid grey. */
   #launch{
-    margin-top:16px;width:100%;height:44px;border-radius:11px;background:var(--ink);color:#fff;
-    font-size:13.5px;font-weight:650;letter-spacing:-.01em;display:flex;align-items:center;justify-content:center;gap:9px;
-    transition:background .18s,transform .12s;
+    margin-top:16px;width:100%;height:38px;border-radius:999px;
+    background:rgba(51,51,51,.94);border:1px solid rgba(112,112,112,.5);color:#fff;
+    display:flex;align-items:center;justify-content:center;gap:7px;
+    font-size:12.5px;font-weight:650;letter-spacing:-.01em;
+    transition:background .16s,transform .12s;
   }
-  #launch:hover{background:var(--accent-deep)}
-  #launch:active{transform:scale(.985)}
+  #launch:hover{background:rgba(74,74,76,.97)}
+  #launch:active{transform:scale(.97)}
+  #launch svg{width:19px;height:19px;stroke:#fff;stroke-width:1.7;fill:none;
+    stroke-linecap:round;stroke-linejoin:round}
+
+  /* settings: top-right, mirroring the brand lockup opposite it. Persists
+     across both modes — it isn't scene chrome, so it doesn't hide on the way
+     into a tour. 38px to match every other tool. */
+  #settingsBtn{position:fixed;z-index:30;top:18px;right:18px;
+    transition:opacity .35s,visibility 0s 0s}
+  #settingsBtn.hide{opacity:0;visibility:hidden;transition:opacity .3s,visibility 0s .3s}
 
   /* ---------- interior HUD ---------- */
   /* visibility (not just opacity) so hidden interior controls can't be clicked from the aerial view */
@@ -224,9 +245,9 @@
     color:#fff;display:flex;align-items:center;justify-content:center;gap:7px;
     height:38px;padding:0 16px;position:relative;
     font-size:12.5px;font-weight:650;letter-spacing:-.01em;
-    transition:background .16s,transform .12s;
+    transition:background .16s,border-color .16s,transform .12s;
   }
-  .tbtn:hover{background:rgba(74,74,76,.8)}
+  .tbtn:hover{border-color:#fff}
   .tbtn:active{transform:scale(.97)}
   .tbtn.circ{width:38px;padding:0}
   .tbtn svg{width:19px;height:19px;stroke:#fff;stroke-width:1.7;fill:none;
@@ -245,9 +266,12 @@
   .iconbtn.wide{width:95px}
   .iconbtn.wide > svg{width:95px;height:38px}
   .iconbtn .btn-bg{fill:rgba(51,51,51,.70)}
-  .iconbtn .btn-ring{fill:none;stroke:rgba(112,112,112,.5);stroke-width:1}
+  .iconbtn .btn-ring{fill:none;stroke:rgba(112,112,112,.5);stroke-width:1;
+    transition:stroke .16s ease}
   .iconbtn .btn-fg{fill:#fff}
-  .iconbtn:hover .btn-bg{fill:rgba(74,74,76,.82)}
+  /* hover is the outline going white, across every tool on the showcase —
+     the surface itself holds still so the scene behind it doesn't shift */
+  .iconbtn:hover .btn-ring{stroke:#fff}
   /* armed / active inverts, matching the supplied white variant */
   .iconbtn.on .btn-bg{fill:#fff}
   .iconbtn.on .btn-fg{fill:#333}
@@ -258,7 +282,9 @@
   #viewSwitch > svg{width:110px;height:38px;display:block;overflow:hidden}
   #viewSwitch .sw-pill{fill:rgba(51,51,51,.70)}
   #viewSwitch .sw-pill-ring,
-  #viewSwitch .knob-ring{fill:none;stroke:rgba(112,112,112,.5);stroke-width:1}
+  #viewSwitch .knob-ring{fill:none;stroke:rgba(112,112,112,.5);stroke-width:1;
+    transition:stroke .16s ease}
+  #viewSwitch:hover .sw-pill-ring{stroke:#fff}
   #viewSwitch .knob-bg{fill:#fff}
   #viewSwitch .g{fill:#fff;transition:fill .2s}
   /* the knob slides between the three slot centres: 19, 55, 91 */
@@ -292,9 +318,10 @@
   .rtbtn.dark{width:38px;height:38px}
   .rtbtn.dark > svg{width:38px;height:38px}
   .rtbtn.dark .btn-bg{fill:rgba(51,51,51,.70)}
-  .rtbtn.dark .btn-ring{fill:none;stroke:rgba(112,112,112,.5);stroke-width:1}
+  .rtbtn.dark .btn-ring{fill:none;stroke:rgba(112,112,112,.5);stroke-width:1;
+    transition:stroke .16s ease}
   .rtbtn.dark .btn-fg{fill:#fff}
-  .rtbtn.dark:hover .btn-bg{fill:rgba(74,74,76,.82)}
+  .rtbtn.dark:hover .btn-ring{stroke:#fff}
   /* the AI button is a white pill with a gradient ring — its own thing */
   .rtbtn.ai{width:42px;height:42px}
   /* inset by 1px so the white sits exactly under the 40px gradient ring
@@ -382,6 +409,7 @@
   #loader.gone{opacity:0;pointer-events:none}
 
   /* the aerial label, hint and controls fade in only once loading finishes */
+  body.loading #settingsBtn,
   body.loading #brandLabel,
   body.loading #aerialTransport,
   body.loading #aerialRight,
@@ -535,7 +563,8 @@
     <div id="cardSub">—</div>
     <div id="cardDesc">—</div>
     <button id="launch">
-      <span>Launch 3D tour</span>
+      <span>Inside</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
     </button>
   </div>
 </div>
@@ -589,6 +618,17 @@
   <div class="sep"></div>
   <button id="amCopy"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7"/></svg> <span id="amCopyLabel">Copy link</span></button>
 </div>
+
+<button class="iconbtn" id="settingsBtn" title="Settings" aria-label="Settings">
+  <svg viewBox="0 0 38 38" fill="none" aria-hidden="true">
+    <path class="btn-bg" d="M0 19C0 8.50659 8.50659 0 19 0C29.4934 0 38 8.50659 38 19C38 29.4934 29.4934 38 19 38C8.50659 38 0 29.4934 0 19Z"/>
+    <path class="btn-ring" d="M19 0.5C29.2173 0.5 37.5 8.78273 37.5 19C37.5 29.2173 29.2173 37.5 19 37.5C8.78273 37.5 0.5 29.2173 0.5 19C0.5 8.78273 8.78273 0.5 19 0.5Z"/>
+    <g class="btn-fg" transform="translate(9,9)">
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M13.3335 10.0007C13.3335 11.8416 11.8411 13.334 10.0001 13.334C8.15917 13.334 6.66678 11.8416 6.66678 10.0007C6.66678 8.1597 8.15917 6.66732 10.0001 6.66732C11.8411 6.66732 13.3335 8.1597 13.3335 10.0007ZM11.6668 10.0007C11.6668 10.9211 10.9206 11.6673 10.0001 11.6673C9.07964 11.6673 8.33345 10.9211 8.33345 10.0007C8.33345 9.08018 9.07964 8.33398 10.0001 8.33398C10.9206 8.33398 11.6668 9.08018 11.6668 10.0007Z"/>
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M5.28778 4.16562L4.69317 3.8908C3.91069 3.52915 2.98156 3.82384 2.55055 4.57036L1.57258 6.26426C1.14158 7.01078 1.35093 7.96278 2.05537 8.4596L2.58991 8.8366C2.5308 9.21595 2.50012 9.60472 2.50012 10.0007C2.50012 10.3966 2.5308 10.7853 2.58991 11.1647L2.05536 11.5417C1.35093 12.0385 1.14157 12.9905 1.57257 13.737L2.55055 15.4309C2.98155 16.1774 3.91068 16.4721 4.69316 16.1105L5.28776 15.8357C5.88974 16.3224 6.56857 16.718 7.3032 17.0011L7.36233 17.6515C7.44037 18.51 8.16015 19.1673 9.02215 19.1673H10.9781C11.8401 19.1673 12.5599 18.51 12.6379 17.6515L12.6971 17.0011C13.4317 16.7179 14.1105 16.3224 14.7125 15.8357L15.3071 16.1105C16.0896 16.4721 17.0187 16.1774 17.4497 15.4309L18.4277 13.737C18.8587 12.9905 18.6493 12.0385 17.9449 11.5417L17.4103 11.1647C17.4694 10.7853 17.5001 10.3966 17.5001 10.0007C17.5001 9.60472 17.4694 9.21596 17.4103 8.83661L17.9449 8.4596C18.6493 7.96278 18.8587 7.01078 18.4277 6.26426L17.4497 4.57036C17.0187 3.82384 16.0896 3.52915 15.3071 3.8908L14.7125 4.16562C14.1105 3.67886 13.4317 3.28336 12.6971 3.00016L12.6379 2.34976C12.5599 1.49129 11.8401 0.833984 10.9781 0.833984H9.02215C8.16015 0.833984 7.44037 1.49129 7.36233 2.34976L7.3032 3.00015C6.56858 3.28335 5.88976 3.67885 5.28778 4.16562ZM7.9027 4.55527L8.86924 4.18267L9.02215 2.50065L10.9781 2.50065L11.131 4.18267L12.0976 4.55528C12.6677 4.77506 13.1956 5.08242 13.6645 5.46161L14.4707 6.11345L16.0063 5.40369L16.9843 7.0976L15.6042 8.07092L15.7635 9.09322C15.8095 9.38798 15.8334 9.69095 15.8334 10.0007C15.8334 10.3103 15.8095 10.6133 15.7635 10.9081L15.6042 11.9304L16.9843 12.9037L16.0063 14.5976L14.4707 13.8878L13.6645 14.5397C13.1956 14.9189 12.6677 15.2262 12.0976 15.446L11.131 15.8186L10.9781 17.5006L9.02215 17.5007L8.86924 15.8186L7.9027 15.446C7.33256 15.2262 6.80466 14.9189 6.33571 14.5397L5.52958 13.8878L3.99392 14.5976L3.01595 12.9037L4.396 11.9304L4.2367 10.9081C4.19077 10.6133 4.16678 10.3104 4.16678 10.0007C4.16678 9.69095 4.19077 9.38797 4.2367 9.09321L4.396 8.07091L3.01595 7.0976L3.99393 5.40369L5.52959 6.11345L6.33572 5.46161C6.80466 5.08242 7.33257 4.77505 7.9027 4.55527Z"/>
+    </g>
+  </svg>
+</button>
 
 <div id="interiorUI">
   <div id="topScrim"></div>
@@ -1796,6 +1836,13 @@ function updateMeasureLabels(){
     m.label.style.top  = ((-mid.y*0.5+0.5)*innerHeight).toFixed(1)+'px';
   }
 }
+
+
+// decorative in this prototype, like the AI button: swallow the events so a
+// click never reaches the orbit rig behind it
+const settingsBtn = document.getElementById('settingsBtn');
+settingsBtn.addEventListener('pointerdown', e=>e.stopPropagation());
+settingsBtn.addEventListener('click', e=>e.stopPropagation());
 
 /* ---- overflow menu ---- */
 function setMore(open){ moreMenu.classList.toggle('open', open); }
