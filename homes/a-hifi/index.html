@@ -1868,7 +1868,7 @@ function computeFocus(p){
 const POIS = [
   { id:'model', n:1, title:'Model Home', sub:'Plan 4 · 3,240 SF · 4 bed / 3.5 bath',
     accent:['#ff3158','#ff7788'],
-    desc:'Two-storey plan on the cul-de-sac, open great room with a 20 ft ridge and a covered patio across the rear.',
+    desc:'Two-story plan on the cul-de-sac, open great room with a 20 ft ridge and a covered patio across the rear.',
     pos:new THREE.Vector3(0, 14, -152),
     front:[0, 1],                                    // faces the cul-de-sac
     frame:{x:0, y:10, z:-150, w:52, h:34}, yaw:0.24, phi:1.12,
@@ -1876,7 +1876,7 @@ const POIS = [
   },
   { id:'homesite14', n:2, title:'Homesite 14', sub:'Plan 2 · Available now',
     accent:['#5b7fb8','#a8c4e8'],
-    desc:'Two-storey elevation facing the community spine, with the primary suite over the front porch.',
+    desc:'Two-story elevation facing the community spine, with the primary suite over the front porch.',
     pos:new THREE.Vector3(-43, 14, 16),
     front:[1, 0],                                    // faces east onto the street
     frame:{x:-41, y:9, z:16, w:46, h:30}, yaw:0.26, phi:1.12,
@@ -2336,7 +2336,7 @@ function zoomBy(sign, step){
    on the next frame, so it can never claim to be running when it isn't. */
 const orbitBtn = document.getElementById('orbitBtn');
 const resetBtn = document.getElementById('resetBtn');
-const TOUR_DWELL = 5000;        // long enough to read a card, short enough to keep moving
+const TOUR_DWELL = 3000;        // long enough to read a card, short enough to keep moving
 let tourOn = false, tourT = 0;
 
 function syncPlay(){

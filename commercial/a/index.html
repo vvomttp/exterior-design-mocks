@@ -1326,7 +1326,7 @@ const POIS = [
   /* Multi-entry: the frame covers the whole shaft rather than the entrance, and
      phi sits low so the tower is read as an elevation from the front — you are
      choosing between storeys, so you need to see the stack. */
-  { id:'entrance', multi:true, n:1, title:'North Tower', sub:'14 storeys · 6 floors available',
+  { id:'entrance', multi:true, n:1, title:'North Tower', sub:'14 stories · 6 floors available',
     accent:['#ff3158','#ff7788'],
     desc:'Double-height glass lobby with 24/7 concierge, turnstile security and direct elevator access to floors 2–14.',
     pos:new THREE.Vector3(-46, 13, -14),
@@ -1378,7 +1378,7 @@ const POIS = [
     front:[0, 1],                                   // open deck edge + apron face +Z
     frame:{x:-108, y:10, z:62, w:66, h:38}, yaw:0.30, phi:1.10
   },
-  { id:'south', multi:true, n:5, title:'South Tower', sub:'10 storeys · 4 floors available',
+  { id:'south', multi:true, n:5, title:'South Tower', sub:'10 stories · 4 floors available',
     accent:['#6d4fb8','#b39ce8'],
     desc:'Ten-story boutique tower. Suite 200 offers 12,500 SF of second-generation space with courtyard views.',
     pos:new THREE.Vector3(40, 14, 8),
@@ -2196,7 +2196,7 @@ function zoomBy(sign, step){
    on the next frame, so it can never claim to be running when it isn't. */
 const orbitBtn = document.getElementById('orbitBtn');
 const resetBtn = document.getElementById('resetBtn');
-const TOUR_DWELL = 5000;        // long enough to read a card, short enough to keep moving
+const TOUR_DWELL = 3000;        // long enough to read a card, short enough to keep moving
 let tourOn = false, tourT = 0;
 
 function syncPlay(){
