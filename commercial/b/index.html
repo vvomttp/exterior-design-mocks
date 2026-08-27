@@ -541,7 +541,7 @@
       <button class="sw-hit" data-view="walk" aria-label="Walk through"><span class="tip">Walk through</span></button>
     </div>
 
-    <button class="iconbtn" id="toolLevels" aria-label="Levels"><span class="tip">Levels</span>
+    <button class="iconbtn" id="toolFloors" aria-label="Floors"><span class="tip">Floors</span>
       <svg viewBox="0 0 38 38" aria-hidden="true">
       <path class="btn-bg" d="M0 19C0 8.50659 8.50659 0 19 0C29.4934 0 38 8.50659 38 19C38 29.4934 29.4934 38 19 38C8.50659 38 0 29.4934 0 19Z"/>
       <path class="btn-ring" d="M19 0.5C29.2173 0.5 37.5 8.78273 37.5 19C37.5 29.2173 29.2173 37.5 19 37.5C8.78273 37.5 0.5 29.2173 0.5 19C0.5 8.78273 8.78273 0.5 19 0.5Z"/>
@@ -627,7 +627,8 @@
 const IDLE_RESUME_MS = 5000;    // resume autoplay after 5s of no interaction
 
 /* ---------------------------------------------------------------- renderer */
-const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance'});
+const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance',
+  logarithmicDepthBuffer:true});   // near-coplanar ground layers need the precision
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
@@ -639,11 +640,19 @@ document.body.appendChild(renderer.domElement);
 
 const AERIAL_FOV   = 46;                  // tight lens flatters the campus massing
 const INTERIOR_FOV = 60;                  // wide lens takes in a whole room
-const camera = new THREE.PerspectiveCamera(AERIAL_FOV, innerWidth/innerHeight, 0.5, 3000);
+const camera = new THREE.PerspectiveCamera(AERIAL_FOV, innerWidth/innerHeight, 4, 2400);
+/* One 0.5-3000 range served neither view well. Aerial never needs to see
+   anything within 4 units; walking a room never needs 3000. */
+const CLIP = { aerial:[4, 2400], interior:[0.3, 400] };
+function setClip(mode){
+  const [n,f] = CLIP[mode] || CLIP.aerial;
+  if(camera.near === n && camera.far === f) return;
+  camera.near = n; camera.far = f; camera.updateProjectionMatrix();
+}
 
 /* ------------------------------------------------------------------ scenes */
 const exterior = new THREE.Scene();
-exterior.fog = new THREE.Fog(0xcfe0f2, 320, 900);
+exterior.fog = null;   // distance falloff lives in the basemap tiles instead
 
 const interior = new THREE.Scene();
 interior.fog = new THREE.Fog(0xdfe7f0, 60, 220);
@@ -669,6 +678,8 @@ const M = {
   metal:      new THREE.MeshStandardMaterial({color:0x9aa3ad, metalness:.8,  roughness:.35}),
   accent:     new THREE.MeshStandardMaterial({color:0x2f7df6, metalness:.2,  roughness:.5}),
   white:      new THREE.MeshStandardMaterial({color:0xffffff, metalness:0,   roughness:.55}),
+  // pavement markings only: they take a polygonOffset the 3D white trim must not
+  stripe:     new THREE.MeshStandardMaterial({color:0xf4f4f2, metalness:0,   roughness:.85}),
   woodLight:  new THREE.MeshStandardMaterial({color:0xd9b98c, metalness:0,   roughness:.7}),
   woodDark:   new THREE.MeshStandardMaterial({color:0x8b6a45, metalness:0,   roughness:.75}),
   carpet:     new THREE.MeshStandardMaterial({color:0x40495a, metalness:0,   roughness:1}),
@@ -685,11 +696,13 @@ const M = {
 };
 
 /* --------------------------------------------------------------------- sky */
-function makeSky(){
+function makeSky(c){
   const g = new THREE.SphereGeometry(1400, 32, 20);
   const m = new THREE.ShaderMaterial({
     side:THREE.BackSide, depthWrite:false,
-    uniforms:{ top:{value:new THREE.Color(0x3f7fc4)}, mid:{value:new THREE.Color(0xa9cbe8)}, bot:{value:new THREE.Color(0xe8eef2)} },
+    uniforms:{ top:{value:new THREE.Color(c ? c[0] : 0x000000)},
+               mid:{value:new THREE.Color(c ? c[1] : 0x05070b)},
+               bot:{value:new THREE.Color(c ? c[2] : 0x0e1218)} },
     vertexShader:'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.);}',
     fragmentShader:`
       varying vec3 vP; uniform vec3 top,mid,bot;
@@ -702,7 +715,10 @@ function makeSky(){
   });
   return new THREE.Mesh(g,m);
 }
-exterior.add(makeSky());
+/* No sky sphere: the capture reads as an object floating in black, the way
+   a real one does in a viewer. makeSky is kept because the fidelity build
+   still samples it for image-based lighting. */
+exterior.background = new THREE.Color(0x000000);
 
 /* ------------------------------------------------------------------ lights */
 function lightRig(scene, sunPos, intensity, ambient, shadowSpan){
@@ -744,29 +760,49 @@ function slab(w,d,mat,x,y,z,rotY,parent){
 }
 
 /* ground + landscape */
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(900,900), M.grassDark);
-ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; site.add(ground);
-slab(420,420, M.grass, 0, .02, 0);
+
+/* ---------------------------------------------------------- ground stack
+   The campus stacks more layers than the residential site does — lot, road,
+   drive, stall markings, lane markings, medians, plaza — and they were packed
+   into 0.07 of a unit. Named heights spaced ~8x further apart, plus explicit
+   polygon offsets, so the order is decided rather than left to depth
+   precision. The whole stack still sits under a unit. */
+const Y = {
+  lawn:   0.16,    // the capture footprint
+  lot:    0.34,    // surface parking
+  road:   0.52,    // asphalt
+  drive:  0.60,    // internal drives
+  stall:  0.68,    // parking stall markings
+  stripe: 0.76,    // lane markings
+  median: 0.84,    // planted strips
+  walk:   0.92,    // plaza and canopy paving
+};
+// M.water is left out on purpose: it is 3D geometry (fountain bowls,
+// pool volumes), and a slope-scaled offset on curved surfaces makes them
+// punch through whatever contains them
+[[M.grass,-1],[M.asphalt,-2],[M.stripe,-4],[M.paver,-3]]
+  .forEach(([m,f])=>{ if(!m) return; m.polygonOffset = true;
+    m.polygonOffsetFactor = f; m.polygonOffsetUnits = f; m.needsUpdate = true; });
 
 /* roads */
-slab(460, 26, M.asphalt, 0, .06, 118);            // frontage road (south)
-slab(26, 300, M.asphalt, -132, .06, -10);         // west road
-slab(150, 16, M.asphalt, -55, .07, 60);           // internal drive
-slab(16, 120, M.asphalt, 70, .07, 40);            // east drive
+slab(460, 26, M.asphalt, 0, Y.road, 118);            // frontage road (south)
+slab(26, 300, M.asphalt, -132, Y.road, -10);         // west road
+slab(150, 16, M.asphalt, -55, Y.drive, 60);           // internal drive
+slab(16, 120, M.asphalt, 70, Y.drive, 40);            // east drive
 // lane markings
-for(let x=-210;x<210;x+=18) slab(9,.9, M.white, x, .09, 118);
-for(let z=-140;z<130;z+=18) slab(.9,9, M.white, -132, .09, z);
+for(let x=-210;x<210;x+=18) slab(9,.9, M.stripe, x, Y.stripe, 118);
+for(let z=-140;z<130;z+=18) slab(.9,9, M.stripe, -132, Y.stripe, z);
 
 /* parking field (south-east) */
 (function parking(){
-  const lot = slab(150, 96, M.asphalt, 78, .05, 70);
+  const lot = slab(150, 96, M.asphalt, 78, Y.lot, 70);
   for(let r=0;r<4;r++){
     const z = 34 + r*22;
     for(let i=0;i<16;i++){
       const x = 12 + i*8.6;
-      slab(.5, 17, M.white, x, .08, z);
+      slab(.5, 17, M.stripe, x, Y.stall, z);
     }
-    slab(140,.6, M.white, 78, .08, z+9.2);
+    slab(140,.6, M.stripe, 78, Y.stall, z+9.2);
   }
   // scattered cars
   const carCols = [0xd8dde3,0x2b3440,0x8d1f28,0x27506e,0xe8e4dc,0x3c5a45,0x6a6e74];
@@ -830,7 +866,7 @@ function tower(cfg){
   const lob = box((cfg.canopyW||22)-2, 5.4, .4, M.glassDark, 0, 3.2, d/2+3.6, g);
   occluders.push(lob);
   // entry steps + plaza
-  slab((cfg.canopyW||22)+14, 22, M.paver, 0, .12, d/2+14, 0, g);
+  slab((cfg.canopyW||22)+14, 22, M.paver, 0, Y.walk, d/2+14, 0, g);
   box((cfg.canopyW||22)+4, .5, 3, M.stone, 0, .3, d/2+4.6, g);
   box((cfg.canopyW||22)+4, .5, 3, M.stone, 0, .6, d/2+3.0, g);
 
@@ -848,7 +884,7 @@ const southTower = tower({x: 40, z: 26, w:28, d:24, floors:10, dark:true, canopy
   box(30, 5, 16, M.stone, 0, 12.6, 0, g);
   box(34, 1, 20, M.white, 0, 15.3, 0, g);
   for(let i=-2;i<=2;i++) box(.6, 9, .6, M.spandrel, i*9, 4.5, 12.1, g);
-  slab(56, 20, M.paver, 0, .12, 20, 0, g);
+  slab(56, 20, M.paver, 0, Y.walk, 20, 0, g);
   // outdoor terrace furniture
   for(let i=-2;i<=2;i++){
     const t = new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.6,.25,14), M.white);
@@ -876,12 +912,17 @@ const southTower = tower({x: 40, z: 26, w:28, d:24, floors:10, dark:true, canopy
   // columns
   for(let i=-2;i<=2;i++) for(const sz of [-1,0,1])
     box(1.1, L*fh, 1.1, M.concrete, i*11, L*fh/2, sz*(D/2-4), g);
-  slab(70, 24, M.asphalt, 0, .06, D/2+16, 0, g);
+  slab(70, 24, M.asphalt, 0, Y.road, D/2+16, 0, g);
 })();
 
 /* --- Central courtyard --------------------------------------------------- */
 (function courtyard(){
-  const g = new THREE.Group(); g.position.set(-4,0,4); site.add(g);
+  /* Raised as a whole rather than element by element: the disc, ring, fountain,
+     benches and lamps were all authored against a ground at 0.14, and lifting
+     the group keeps every one of those relationships intact. Before this the
+     ring sat at exactly 0.16 — the same height as the capture footprint — which
+     is what made the fountain flicker, and the disc was buried beneath it. */
+  const g = new THREE.Group(); g.position.set(-4, Y.walk - .14, 4); site.add(g);
   const disc = new THREE.Mesh(new THREE.CircleGeometry(34, 48), M.paver);
   disc.rotation.x=-Math.PI/2; disc.position.y=.14; disc.receiveShadow=true; g.add(disc);
   const ring = new THREE.Mesh(new THREE.RingGeometry(21, 23.4, 48), M.stoneDark);
@@ -934,8 +975,8 @@ for(let i=0;i<26;i++){
   tree(Math.cos(a)*r, Math.sin(a)*r, .8+Math.random()*.6);
 }
 // planter beds
-slab(120, 12, M.grass, -46, .1, 22);
-slab(12, 90, M.grass, 96, .1, -30);
+slab(120, 12, M.grass, -46, Y.median, 22);
+slab(12, 90, M.grass, 96, Y.median, -30);
 
 /* ============================================================== ENTRY POINT */
 /* One destination: the North Tower lobby. The transition is a cross-fade, so
@@ -944,6 +985,283 @@ const ENTRY = {
   id:'entrance',
   interior:'lobby',
 };
+
+
+/* ============================================ CAPTURE FOOTPRINT + BASEMAP
+   A real capture doesn't stop on a straight line — it ends wherever the drone
+   stopped flying, so the footprint is a ragged closed contour with a rim that
+   degrades into whatever the basemap underneath it is. Everything beyond that
+   contour is context imagery: lower resolution, flatter, and already present
+   before the capture streams in. */
+
+const CAPTURE_R = 330;                 // mean radius; campus content reaches ~265
+const CAP_SEGS  = 128;
+
+// Integer frequencies keep the contour seamless where it wraps at 2PI.
+function captureRadius(a){
+  return CAPTURE_R * (1
+    + 0.055*Math.sin(a*3  + 0.7)
+    + 0.035*Math.sin(a*5  + 2.1)
+    + 0.022*Math.sin(a*8  + 4.4)
+    + 0.014*Math.sin(a*13 + 1.2));
+}
+
+/* Three rings: centre, an inner ring carrying the material at full strength,
+   and the rim, tinted toward the basemap through vertex colours so the capture
+   dissolves into its surroundings instead of ending on a cut line. UVs mimic
+   the 460-unit plane this replaces, so existing texture repeats still land at
+   the same density. */
+function captureGeometry(){
+  const pos = [], uv = [], col = [], idx = [];
+  const push = (x, z, c) => {
+    pos.push(x, 0, z);
+    uv.push(x/460 + 0.5, z/460 + 0.5);
+    col.push(c[0], c[1], c[2]);
+  };
+  const FULL = [1, 1, 1], RIM = [0.74, 0.77, 0.68];
+
+  push(0, 0, FULL);                                        // 0: centre
+  for(let i=0;i<CAP_SEGS;i++){                             // 1..N inner
+    const a = i/CAP_SEGS * Math.PI*2, r = captureRadius(a) * 0.88;
+    push(Math.cos(a)*r, Math.sin(a)*r, FULL);
+  }
+  for(let i=0;i<CAP_SEGS;i++){                             // N+1..2N rim
+    const a = i/CAP_SEGS * Math.PI*2, r = captureRadius(a);
+    push(Math.cos(a)*r, Math.sin(a)*r, RIM);
+  }
+  for(let i=0;i<CAP_SEGS;i++){
+    const n = (i+1) % CAP_SEGS;
+    idx.push(0, 1+n, 1+i);                                 // centre fan
+    const ii = 1+i, inx = 1+n, oi = 1+CAP_SEGS+i, onx = 1+CAP_SEGS+n;
+    idx.push(ii, onx, oi, ii, inx, onx);                   // inner -> rim band
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv',       new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('color',    new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+const captureMat = M.grass.clone();
+captureMat.vertexColors = true;
+const capture = new THREE.Mesh(captureGeometry(), captureMat);
+capture.position.y = Y.lawn;
+capture.receiveShadow = true;
+site.add(capture);
+
+/* ---- context basemap ---------------------------------------------------
+   Stand-in for tiled aerial imagery: coarse, desaturated, and drawn once into
+   a handful of canvases rather than fetched. Per-tile tint and rotation break
+   the repeat the way a real mosaic does — satellite tiles are flown on
+   different days, so neighbours never quite match. */
+const basemap = new THREE.Group();
+exterior.add(basemap);
+
+function tileCanvas(seed){
+  let s = seed;
+  const rnd = ()=> (s = (s*1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const x = c.getContext('2d');
+  x.fillStyle = '#7d8a63'; x.fillRect(0,0,256,256);
+  for(let i=0;i<26;i++){                                   // fields and tree mass
+    x.fillStyle = ['#6f7d57','#879166','#94a06f','#6a7552','#8d8a6b'][(rnd()*5)|0];
+    x.globalAlpha = 0.5 + rnd()*0.4;
+    const w = 26 + rnd()*90, h = 26 + rnd()*90;
+    x.fillRect(rnd()*256 - w/2, rnd()*256 - h/2, w, h);
+  }
+  x.globalAlpha = 1;
+  for(let i=0;i<3;i++){                                    // arterial roads
+    x.strokeStyle = 'rgba(190,188,180,.55)';
+    x.lineWidth = 2 + rnd()*2.5;
+    x.beginPath();
+    if(rnd() < .5){ const y0 = rnd()*256; x.moveTo(0,y0); x.lineTo(256, y0 + (rnd()*60-30)); }
+    else          { const x0 = rnd()*256; x.moveTo(x0,0); x.lineTo(x0 + (rnd()*60-30), 256); }
+    x.stroke();
+  }
+  for(let i=0;i<40;i++){                                   // rooftops
+    x.fillStyle = ['rgba(150,146,140,.55)','rgba(120,116,112,.5)','rgba(168,160,150,.45)'][(rnd()*3)|0];
+    x.fillRect(rnd()*256, rnd()*256, 4 + rnd()*11, 4 + rnd()*11);
+  }
+  for(let i=0;i<2200;i++){                                 // sensor grain
+    x.fillStyle = rnd() < .5 ? 'rgba(0,0,0,.05)' : 'rgba(255,255,255,.05)';
+    x.fillRect(rnd()*256, rnd()*256, 1.5, 1.5);
+  }
+  return c;
+}
+
+const TILE = 100, TILE_N = 23;                             // 2300 units of context
+(function buildBasemap(){
+  const texes = [0,1,2].map(i=>{
+    const t = new THREE.CanvasTexture(tileCanvas(97 + i*5417));
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.encoding = THREE.sRGBEncoding;
+    return t;
+  });
+  // one material per texture/tint pair, reused across the grid
+  const tints = [0xffffff, 0xf0efe6, 0xe6e8dc, 0xf6f2e8];
+  const mats = [];
+  for(const t of texes) for(const c of tints){
+    mats.push(new THREE.MeshStandardMaterial({
+      map:t, color:c, roughness:1, metalness:0, vertexColors:true,
+      // the basemap is imagery, not a lit surface — keep it flat so it reads
+      // as a different order of thing to the capture sitting on top of it
+      envMapIntensity:0.25
+    }));
+  }
+  /* The context ring steps down to black rather than blending smoothly. Each
+     tile takes one flat brightness from a quantised ladder, so the grid stays
+     legible as it dissolves — the look of tiles dropping out a level at a time
+     rather than an airbrushed vignette. A deterministic ±1 step of jitter keeps
+     it from reading as perfect concentric rings, since real tile loads are
+     never that even. */
+  // a longer run at 16 levels rather than a short one at 8: the ladder is finer
+  // and there is more ground to spread it over, so no two adjacent rings share
+  // a value by accident
+  const FADE0 = CAPTURE_R * 1.2, FADE1 = CAPTURE_R * 3.4;
+  const FADE_STEPS = 16;
+  const geo = new THREE.PlaneGeometry(TILE, TILE);
+  const half = (TILE_N-1)/2;
+  for(let i=0;i<TILE_N;i++) for(let j=0;j<TILE_N;j++){
+    const h = (i*73856093 ^ j*19349663) >>> 0;
+    const x = (i-half)*TILE, z = (j-half)*TILE;
+
+    const t = clamp((Math.hypot(x, z) - FADE0) / (FADE1 - FADE0), 0, 1);
+    const jitter = (((h >>> 9) & 7) - 3) / FADE_STEPS;        // -3..+4 steps, on-ladder
+    const level = clamp(Math.round((1 - t) * FADE_STEPS) / FADE_STEPS + jitter, 0, 1);
+    if(level <= 0) continue;                                  // black: never drawn
+
+    const m = new THREE.Mesh(geo.clone(), mats[h % mats.length]);
+    m.rotation.x = -Math.PI/2;
+    m.rotation.z = (h >> 4 & 3) * Math.PI/2;                  // break the grid
+    m.position.set(x, -0.6, z);
+
+    /* Half-size tiles would otherwise show the imagery at double scale. Crop
+       each one to a slice of its texture instead, at a per-tile offset, so
+       feature size on the ground stays put and neighbours don't repeat. */
+    const uv = m.geometry.attributes.uv;
+    const ou = ((h >>> 11) & 255) / 255, ov = ((h >>> 19) & 255) / 255;
+    for(let k=0;k<uv.count;k++)
+      uv.setXY(k, uv.getX(k)*0.5 + ou, uv.getY(k)*0.5 + ov);
+    uv.needsUpdate = true;
+
+    const p = m.geometry.attributes.position;
+    const col = new Float32Array(p.count * 3).fill(level);    // flat across the tile
+    m.geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    basemap.add(m);
+  }
+})();
+
+/* ---- streamed reveal ---------------------------------------------------
+   The basemap is there from the first frame; the capture blooms outward from
+   the centre over it, the way a tiled scene resolves nearest-first. Driven by
+   one growing radius rather than per-object timers, so it stays stateless. */
+/* One wavefront drives everything. `u` is progress measured in footprint
+   radii: at u=1 the contour is fully grown, and the wave keeps travelling to
+   1.28 so the objects sitting closest to the rim finish just after it. Because
+   the edge is evaluated per angle, the wave follows the ragged contour rather
+   than sweeping a perfect circle across it. */
+const reveal = { u: 0, running: false, done: false };
+// REVEAL_SECS is the dial for pace; REVEAL_OVERRUN is how far the wave has to
+// travel, set by the outermost lit tile at roughly 3x the capture radius
+const REVEAL_SECS = 4.2, REVEAL_OVERRUN = 3.6;
+const revealTargets = [];
+/* Collected when the loader hands over, not when this block is defined —
+   trees, cars and other scatter are added further down the file, and reading
+   site.children too early would leave them out of the reveal and pop them in
+   at full size on the first frame.
+
+   Buildings fade rather than scale, which means opacity, which means each one
+   needs materials of its own: the palettes are shared across the whole site, so
+   animating them in place would fade every house at once. Clones are made for
+   the duration and handed back at the end, so the run-time scene keeps the
+   shared materials it started with. */
+function startReveal(){
+  revealTargets.length = 0;
+  const box = new THREE.Box3(), sph = new THREE.Sphere();
+  // the context ring rides the same wavefront, so the load keeps travelling
+  // outward past the capture instead of stopping at its edge
+  site.children.concat(basemap.children).forEach(o=>{
+    if(o === capture) return;
+    /* Bounds first, while the object is still visible. A road is 300 units
+       long: keyed off its centre alone it would flick on all at once halfway
+       through the sweep, which is what made the old pass feel disjointed.
+       Measured near-edge to far-edge, the wave crosses it instead. */
+    box.setFromObject(o); box.getBoundingSphere(sph);
+    const dist = Math.hypot(sph.center.x, sph.center.z);
+    const t = {
+      o,
+      a:    Math.atan2(sph.center.z, sph.center.x),   // where it sits on the contour
+      near: Math.max(dist - sph.radius, 0),
+      span: Math.max(sph.radius * 2, 34),             // floor so small props still ease
+      mats: [], k: -1
+    };
+    o.traverse(n=>{
+      if(!n.isMesh) return;
+      const orig = n.material;
+      const copy = Array.isArray(orig) ? orig.map(m=>m.clone()) : orig.clone();
+      n.userData._origMat = orig;
+      n.material = copy;
+      (Array.isArray(copy) ? copy : [copy]).forEach(m=>{
+        m.transparent = true; m.opacity = 0; t.mats.push(m);
+      });
+    });
+    o.visible = false;
+    revealTargets.push(t);
+  });
+  capture.scale.set(0.0001, 1, 0.0001);
+  reveal.u = 0; reveal.running = true; reveal.done = false;
+}
+
+// give an object its shared materials back and drop the temporary clones
+function settle(t){
+  t.o.traverse(n=>{
+    if(!n.isMesh || !n.userData._origMat) return;
+    const copy = n.material;
+    n.material = n.userData._origMat;
+    delete n.userData._origMat;
+    (Array.isArray(copy) ? copy : [copy]).forEach(m=>m.dispose());
+  });
+  t.mats.length = 0;
+}
+
+function applyReveal(dt){
+  if(!reveal.running || reveal.done) return;
+  reveal.u += dt * (REVEAL_OVERRUN / REVEAL_SECS);
+  const u = Math.min(reveal.u, REVEAL_OVERRUN);
+  const x = u/REVEAL_OVERRUN;
+  const e = x*x*(3 - 2*x);          // eases in and out: the ground gets a beat
+                                    // on its own, then objects land at an even
+                                    // rate rather than all inside the first
+                                    // half-second with a long tail after
+  const w = e * REVEAL_OVERRUN;
+
+  const grow = clamp(w, 0.0001, 1);
+  capture.scale.set(grow, 1, grow);
+
+  let pending = 0;
+  for(const t of revealTargets){
+    if(!t.mats.length) continue;                          // already settled
+    const edge = w * captureRadius(t.a);                  // the contour, at its angle
+    const k = clamp((edge - t.near) / t.span, 0, 1);
+    if(k < 1){
+      pending++;
+      const o = k*k*(3 - 2*k);                            // smoothstep, no overshoot
+      if(o !== t.k){ for(const m of t.mats) m.opacity = o; t.k = o; }
+      t.o.visible = k > 0;
+    } else {
+      t.o.visible = true;
+      settle(t);
+    }
+  }
+  if(!pending && grow >= 1){
+    reveal.done = true;
+    revealTargets.forEach(t=>{ if(t.mats.length) settle(t); t.o.visible = true; });
+    capture.scale.set(1,1,1);
+  }
+}
 
 /* ============================================== INTERIOR SCENE (parametric) */
 lightRig(interior, {x:26,y:44,z:34}, 1.5, .8, 60);
@@ -1147,6 +1465,54 @@ addEventListener('keydown', e=>{
   }
 });
 
+
+/* ---- held-key movement ------------------------------------------------
+   Tracked as a set and integrated in the frame loop rather than stepped on
+   keydown, so movement is smooth, diagonals work, and speed doesn't depend on
+   the OS key-repeat rate. Cleared on blur — otherwise tabbing away mid-press
+   leaves the camera drifting forever. */
+const heldKeys = new Set();
+const MOVE_KEYS = new Set(['w','a','s','d','q','e',
+  'arrowup','arrowdown','arrowleft','arrowright','pageup','pagedown']);
+
+addEventListener('keydown', e=>{
+  const k = e.key.toLowerCase();
+  if(!MOVE_KEYS.has(k)) return;
+  if(rig.mode !== 'aerial') return;          // the tour binds these to walking
+  e.preventDefault();
+  heldKeys.add(k);
+});
+addEventListener('keyup', e=>{ heldKeys.delete(e.key.toLowerCase()); });
+addEventListener('blur', ()=>heldKeys.clear());
+
+/* Translate the orbit target across the site. Forward is where the camera is
+   looking, flattened to the ground plane, so the controls stay oriented to what
+   you see rather than to world axes. Speed scales with distance: a nudge covers
+   the same fraction of the screen whether you're overhead or down at lot level. */
+const MOVE_BOUND = 200, MOVE_Y = [0, 90];
+function moveStep(dt){
+  if(!heldKeys.size) return;
+  const f = (heldKeys.has('w') || heldKeys.has('arrowup')   ? 1 : 0)
+          - (heldKeys.has('s') || heldKeys.has('arrowdown') ? 1 : 0);
+  const r = (heldKeys.has('d') || heldKeys.has('arrowright') ? 1 : 0)
+          - (heldKeys.has('a') || heldKeys.has('arrowleft')  ? 1 : 0);
+  const u = (heldKeys.has('e') || heldKeys.has('pageup')   ? 1 : 0)
+          - (heldKeys.has('q') || heldKeys.has('pagedown') ? 1 : 0);
+  if(!f && !r && !u) return;
+
+  nudge();                                   // moving counts as taking the wheel
+  const th = rig.gTheta;
+  // camera sits at target + (sin, ., cos)*radius and looks back at it
+  const fx = -Math.sin(th), fz = -Math.cos(th);
+  const rx =  Math.cos(th), rz = -Math.sin(th);
+  const norm = (f && r) ? 0.7071 : 1;        // no diagonal speed bonus
+  const sp = rig.gRadius * 0.55 * dt * norm;
+
+  rig.gTarget.x = clamp(rig.gTarget.x + (fx*f + rx*r) * sp, -MOVE_BOUND, MOVE_BOUND);
+  rig.gTarget.z = clamp(rig.gTarget.z + (fz*f + rz*r) * sp, -MOVE_BOUND, MOVE_BOUND);
+  if(u) rig.gTarget.y = clamp(rig.gTarget.y + u * rig.gRadius * 0.30 * dt, MOVE_Y[0], MOVE_Y[1]);
+}
+
 /* ======================================================== TOUR TRANSITIONS */
 const veil = document.getElementById('veil');
 const intUI = document.getElementById('interiorUI');
@@ -1215,8 +1581,7 @@ async function enterInterior(poi){
   rig.mode = 'transition';
   document.getElementById('hint').style.opacity = 0;
   aerialBar.classList.add('hide');
-  aerialRight.classList.add('hide');
-  setMoreAerial(false);
+  aerialRight.classList.add('hide');  setMoreAerial(false);
   brandLabel.classList.add('hide');
 
   // save aerial state to return to
@@ -1232,6 +1597,7 @@ async function enterInterior(poi){
   tour.cfg = cfg; tour.i = 0;
   rig.mode = 'interior';
   rig.view = 'walk';
+  setClip('interior');
   camera.fov = INTERIOR_FOV; camera.updateProjectionMatrix();
   markView('walk');
   setMeasuring(false);
@@ -1266,6 +1632,7 @@ async function exitInterior(){
   intUI.classList.remove('show');
   await fade(1, 460);
   activeScene = exterior;
+  setClip('aerial');
   camera.fov = AERIAL_FOV; camera.updateProjectionMatrix();
   clearInterior();
   tour.cfg = null;
@@ -1281,8 +1648,7 @@ async function exitInterior(){
   rig.auto = false; rig.idle = 0;
   document.getElementById('hint').style.opacity = 1;
   aerialBar.classList.remove('hide');
-  aerialRight.classList.remove('hide');
-  brandLabel.classList.remove('hide');
+  aerialRight.classList.remove('hide');  brandLabel.classList.remove('hide');
   await fade(0, 620);
 }
 document.getElementById('exitBtn').addEventListener('click', e=>{ e.stopPropagation(); exitInterior(); });
@@ -1367,7 +1733,7 @@ viewSwitch.querySelectorAll('.sw-hit').forEach(b=>{
   b.addEventListener('click', e=>{ e.stopPropagation(); setView(b.dataset.view); });
 });
 // decorative in this prototype — no levels or furnishings data behind them yet
-document.getElementById('toolLevels').addEventListener('click', e=>e.stopPropagation());
+document.getElementById('toolFloors').addEventListener('click', e=>e.stopPropagation());
 document.getElementById('toolFurniture').addEventListener('click', e=>e.stopPropagation());
 
 /* ---- measure: two raycast hits, a line, and a label ---- */
@@ -1468,6 +1834,7 @@ moreBtn.addEventListener('pointerdown', e=>e.stopPropagation());
 });
 moreBtn.addEventListener('click', e=>{ e.stopPropagation(); setMore(!moreMenu.classList.contains('open')); });
 moreMenu.addEventListener('pointerdown', e=>e.stopPropagation());
+
 
 /* ---- aerial auxiliary menu ---- */
 const moreBtnAerial  = document.getElementById('moreBtnAerial');
@@ -1735,6 +2102,8 @@ function frame(){
       rig.gPhi    = lerp(rig.gPhi,    HOME.phi,    dt*0.9);
       rig.gRadius = lerp(rig.gRadius, HOME.radius, dt*0.9);
     }
+    moveStep(dt);
+    applyReveal(dt);
     const k = 1 - Math.pow(0.0016, dt);         // frame-rate independent damping
     rig.theta  = lerp(rig.theta,  rig.gTheta,  k);
     rig.phi    = lerp(rig.phi,    rig.gPhi,    k);
@@ -1787,6 +2156,7 @@ const LOADER_MIN_MS = 1500;      // minimum dwell so the branded screen is seen
 setTimeout(()=>{
   document.getElementById('loader').classList.add('gone');
   document.body.classList.remove('loading');      // reveals the aerial chrome
+  startReveal();                                  // capture streams in over the basemap
   setTimeout(()=>document.getElementById('hint').style.opacity=.001, 9000);
 }, LOADER_MIN_MS);
 

@@ -36,7 +36,7 @@
     min-height:100vh;
     min-height:100dvh;            /* accounts for mobile browser chrome */
     display:flex;align-items:center;justify-content:center;
-    padding:40px 24px;position:relative;overflow-x:hidden;
+    padding:32px 24px;position:relative;overflow-x:hidden;
   }
   /* soft light from the top, so the page isn't a flat black rectangle */
   body::before{
@@ -46,7 +46,7 @@
       radial-gradient(600px 400px at 85% 105%, rgba(120,90,255,.10), transparent 70%);
   }
 
-  main{width:100%;max-width:620px;position:relative}
+  main{width:100%;max-width:1080px;position:relative}
 
   h1{
     font-size:clamp(30px,6vw,44px);line-height:1.1;letter-spacing:-.03em;
@@ -56,8 +56,13 @@
     font-size:15px;line-height:1.6;color:var(--muted);margin:0 0 38px;max-width:46ch;
   }
 
-  ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
-  ul + .group{margin-top:34px}
+  ul{list-style:none;margin:0;padding:0;
+     display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:stretch}
+  li{display:flex}
+  /* the fidelity test is a rendering exploration, not a fifth strategy — it
+     runs full width under the residential row and drops the Q&A entirely */
+  li.wide{grid-column:1 / -1}
+  ul + .group{margin-top:26px}
   .group{display:flex;align-items:center;gap:9px;
     font-size:12.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
     color:var(--muted);margin-bottom:14px}
@@ -67,7 +72,7 @@
   a.card{
     /* the cards carry a Q&A block now, so they top-align rather than centre —
        otherwise the badge floats to the middle of a tall card */
-    display:flex;align-items:flex-start;gap:18px;
+    display:flex;align-items:flex-start;gap:18px;width:100%;
     padding:22px 24px;border-radius:16px;text-decoration:none;color:inherit;
     background:var(--card);border:1px solid var(--line);
     transition:background .18s ease,border-color .18s ease,transform .18s cubic-bezier(.22,1,.36,1);
@@ -95,7 +100,7 @@
 
   /* ---- the case for each prototype, in Q&A form ---- */
   /* `.a` is already the Strategy-A card modifier, hence the qa- prefix here */
-  .qa{display:block;margin-top:14px;padding-top:13px;border-top:1px solid var(--line)}
+  .qa{display:block;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
   .qa-row{display:block;margin-top:10px}
   .qa-row:first-child{margin-top:0}
   .qa-q{display:block;font-size:11px;font-weight:700;letter-spacing:.10em;
@@ -106,7 +111,28 @@
     stroke:var(--muted);stroke-width:2;fill:none;
     stroke-linecap:round;stroke-linejoin:round;transition:stroke .18s,transform .18s}
   a.card:hover .chev{stroke:var(--text);transform:translateX(3px)}
+  li.wide a.card{align-items:center}
+  li.wide .chev{margin-top:0}
 
+  /* the flow board sits above the prototypes: context before the artefacts */
+  .flow{
+    display:inline-flex;align-items:center;gap:9px;margin:0 0 34px;
+    padding:11px 16px 11px 13px;border-radius:12px;text-decoration:none;color:inherit;
+    background:var(--card);border:1px solid var(--line);
+    font-size:13.5px;font-weight:600;letter-spacing:-.01em;
+    transition:background .18s ease,border-color .18s ease;
+  }
+  .flow:hover{background:var(--card-hover);border-color:rgba(255,255,255,.22)}
+  .flow:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  .flow .ico{width:17px;height:17px;flex:none;stroke:var(--accent);stroke-width:1.9;fill:none;
+    stroke-linecap:round;stroke-linejoin:round}
+  .flow .ext{width:13px;height:13px;flex:none;stroke:var(--muted);stroke-width:2;fill:none;
+    stroke-linecap:round;stroke-linejoin:round;margin-left:2px}
+  .flow:hover .ext{stroke:var(--text)}
+
+  @media (max-width:900px){
+    ul{grid-template-columns:1fr}
+  }
   @media (max-width:520px){
     a.card{padding:18px;gap:14px}
     .badge{width:38px;height:38px;font-size:14px}
@@ -118,6 +144,20 @@
 <main>
   <h1>Exterior to Interior UX Prototypes</h1>
   <p class="sub">Two approaches to moving a viewer from an aerial view into a walkable interior tour</p>
+
+  <a class="flow" href="https://www.figma.com/board/NNso5cirCw6akBW8y13HGX/Splats-Flows?node-id=0-1&amp;t=Pjbpc3GjUAO65Js3-1"
+     target="_blank" rel="noopener noreferrer">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="5" rx="1"/>
+      <rect x="14" y="16" width="7" height="5" rx="1"/>
+      <path d="M6.5 8v5.5a2 2 0 0 0 2 2h9"/>
+    </svg>
+    User flow board
+    <svg class="ext" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M14 4h6v6"/><path d="M20 4l-8.5 8.5"/>
+      <path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>
+    </svg>
+  </a>
 
   <div class="group">
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -133,8 +173,7 @@
       <a class="card a" href="commercial/a/index.html">
         <span class="badge">A</span>
         <span class="txt">
-          <span class="name">Strategy A: Pin based</span>
-          <span class="desc">Points of interest marked on showcase, each launching its own tour</span>
+          <span class="name">Strategy A: Multi entry points</span>
           <span class="qa">
             <span class="qa-row"><span class="qa-q">What problem does it solve?</span><span class="qa-a">For commercial spaces, there are various entry points and amenities that can&rsquo;t be represented in one entry point.</span></span>
             <span class="qa-row"><span class="qa-q">How does it affect the user?</span><span class="qa-a">Allows for user initiated discoverability, and provides an overview of what the property contains.</span></span>
@@ -148,8 +187,7 @@
       <a class="card b" href="commercial/b/index.html">
         <span class="badge">B</span>
         <span class="txt">
-          <span class="name">Strategy B: Simplified</span>
-          <span class="desc">Single entry point marked on showcase, launching one interior tour</span>
+          <span class="name">Strategy B: Single entry</span>
           <span class="qa">
             <span class="qa-row"><span class="qa-q">What problem does it solve?</span><span class="qa-a">Many listings have a single space worth showing. Pins would add choices the property doesn&rsquo;t have.</span></span>
             <span class="qa-row"><span class="qa-q">How does it affect the user?</span><span class="qa-a">One button to go inside. The aerial orbit establishes context first.</span></span>
@@ -174,8 +212,7 @@
       <a class="card a" href="homes/a/index.html">
         <span class="badge">A</span>
         <span class="txt">
-          <span class="name">Strategy A: Pin based</span>
-          <span class="desc">Points of interest across the community, each launching its own tour</span>
+          <span class="name">Strategy A: Multi entry points</span>
           <span class="qa">
             <span class="qa-row"><span class="qa-q">What problem does it solve?</span><span class="qa-a">Home buyers, developers, and builders can evaluate the environmental context of the whole community, then drill into individual structures &mdash; the 1:many case a single entry point can&rsquo;t serve.</span></span>
             <span class="qa-row"><span class="qa-q">How does it affect the user?</span><span class="qa-a">Compares homesites in place, and sees where each one sits relative to the amenities.</span></span>
@@ -189,8 +226,7 @@
       <a class="card b" href="homes/b/index.html">
         <span class="badge">B</span>
         <span class="txt">
-          <span class="name">Strategy B: Simplified</span>
-          <span class="desc">Single entry point on the model home, launching one interior tour</span>
+          <span class="name">Strategy B: Single entry</span>
           <span class="qa">
             <span class="qa-row"><span class="qa-q">What problem does it solve?</span><span class="qa-a">A single home with one capture has nothing to choose between.</span></span>
             <span class="qa-row"><span class="qa-q">How does it affect the user?</span><span class="qa-a">Orbits the lot to read street, neighbors and setback, then goes inside.</span></span>
@@ -200,7 +236,7 @@
         <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
       </a>
     </li>
-    <li>
+    <li class="wide">
       <a class="card a" href="homes/a-hifi/index.html">
         <span class="badge">A+</span>
         <span class="txt">
