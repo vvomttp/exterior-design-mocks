@@ -224,6 +224,43 @@
   .cnav:hover{opacity:1;background:rgba(255,255,255,.18)}
   #card.textonly .cnav:hover{background:rgba(15,23,38,.10)}
 
+  /* Docked rather than pinned: a two-story home is framed into the left of the
+     screen, so the card takes the right and holds still. Anchored to the pin it
+     would sit on the house it describes, and re-anchor on every floor hover. */
+  #card.docked{left:75%;right:auto;top:50%;transform:translate(-50%,-50%) scale(.97)}
+  #card.docked.show{transform:translate(-50%,-50%)}
+
+  /* ---- multi-entry card: the floor stack ----
+     A plan is a set of floors, not one destination, so the card carries them and
+     the CTA waits until one is chosen. Rows mirror the x-ray on the house
+     itself, so hovering here and hovering there are the same act. Rows name what
+     is on the floor — no availability, no rates; this is a home, not a tenancy. */
+  #floorList{display:none;margin-top:12px;border-top:1px solid var(--line)}
+  #card.floors #floorList{display:block}
+  #card.floors #cardDesc,
+  #card.floors #launch{display:none}
+  .frow{display:flex;align-items:baseline;gap:10px;width:100%;padding:11px 4px;
+    border-bottom:1px solid var(--line);text-align:left;background:none;
+    transition:background .14s ease,padding-left .14s ease}
+  .frow:last-child{border-bottom:none}
+  .frow:hover,.frow.hot{background:rgba(15,23,38,.05);padding-left:8px}
+  .frow .fl{font-size:13px;font-weight:650;color:var(--ink);letter-spacing:-.01em;flex:none;width:56px}
+  .frow .fsf{font-size:12px;color:var(--muted);font-weight:550;line-height:1.45;flex:1}
+
+  /* Inside a floor, the counter gives up its corner. Stepping between points is
+     the wrong move when you are one level into one of them; going back to the
+     stack is the right one, so it takes the same chip in the same place. */
+  #cardBack{position:absolute;top:10px;left:10px;height:28px;padding:0 10px 0 6px;
+    border-radius:999px;display:none;align-items:center;gap:3px;
+    background:rgba(0,0,0,.28);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    font-size:11px;font-weight:650;letter-spacing:.01em;color:#fff;
+    transition:background .14s ease}
+  #cardBack:hover{background:rgba(0,0,0,.46)}
+  #cardBack svg{width:13px;height:13px;flex:none;stroke:#fff;stroke-width:2.2;fill:none;
+    stroke-linecap:round;stroke-linejoin:round}
+  #card.floordetail #cardBack{display:flex}
+  #card.floordetail #cardCount{display:none}
+
   /* ---- text-only card ----
      A secondary point has no tour, so there is no interior still to show and
      the art box would just be an empty well. Collapse it and let the copy
@@ -407,8 +444,78 @@
   #moreMenu svg,#moreMenuAerial svg{width:15px;height:15px;stroke:rgba(255,255,255,.62);stroke-width:1.9;fill:none;
     stroke-linecap:round;stroke-linejoin:round;flex:none}
   #moreMenu .sep,#moreMenuAerial .sep{height:1px;background:rgba(255,255,255,.12);margin:5px 8px}
-  /* the aerial copy is fixed rather than absolute — it lives outside #interiorUI */
-  #moreMenuAerial{position:fixed;z-index:31;bottom:74px;right:22px}
+  /* The aerial copy is fixed rather than absolute — it lives outside #interiorUI
+     — and carries the Showcase overflow spec rather than the interior menu's:
+     195 wide, 8 padding, 8 gap, #222 at 90% behind a 5px blur and a #707070
+     hairline. Ten 32px rows plus the gaps and padding come to the 408 height the
+     spec asks for, so it is left to size itself rather than pinned. */
+  #moreMenuAerial{
+    box-sizing:border-box;
+    position:fixed;z-index:31;right:22px;bottom:74px;
+    display:flex;flex-direction:column;align-items:flex-start;
+    width:195px;padding:8px;gap:8px;
+    background:rgba(34,34,34,.9);
+    border:1px solid rgba(112,112,112,.5);
+    backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+    border-radius:8px}
+  #moreMenuAerial button{
+    display:flex;align-items:center;gap:11px;width:100%;height:32px;flex:none;
+    padding:0 8px;border-radius:6px;
+    font-size:13px;font-weight:650;color:#fff;letter-spacing:-.01em;text-align:left;
+    transition:background .14s ease}
+  #moreMenuAerial button:hover{background:rgba(255,255,255,.10)}
+  #moreMenuAerial svg{width:16px;height:16px;flex:none;
+    stroke:#fff;stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  #moreMenuAerial svg .fill{fill:#fff;stroke:none}
+
+  /* ---------- keyboard shortcuts ----------
+     A reference panel, so it is centred rather than tucked against the button
+     that opened it. */
+  #shortcuts{
+    box-sizing:border-box;
+    display:flex;flex-direction:column;align-items:flex-start;
+    padding:16px;gap:8px;
+    position:fixed;z-index:60;width:544px;height:437px;
+    left:calc(50% - 544px/2);top:calc(50% - 437px/2);
+    background:rgba(34,34,34,.9);
+    border:1px solid rgba(112,112,112,.5);
+    backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+    border-radius:12px;color:#fff;
+    opacity:0;visibility:hidden;transform:scale(.98);
+    transition:opacity .2s ease,transform .24s cubic-bezier(.22,1,.36,1),visibility 0s .24s}
+  #shortcuts.open{opacity:1;visibility:visible;transform:none;
+    transition:opacity .2s ease,transform .24s cubic-bezier(.22,1,.36,1),visibility 0s 0s}
+  #shortcuts .sc-head{display:flex;align-items:center;gap:11px;width:100%;flex:none}
+  #shortcuts .sc-head > svg{width:23px;height:23px;flex:none;stroke:#fff;stroke-width:1.6;fill:none;
+    stroke-linecap:round;stroke-linejoin:round}
+  #shortcuts .sc-title{font-size:19px;font-weight:700;letter-spacing:-.02em;flex:1}
+  #shortcuts .sc-x{width:28px;height:28px;flex:none;display:grid;place-items:center;
+    border-radius:50%;background:none;transition:background .14s ease}
+  #shortcuts .sc-x:hover{background:rgba(255,255,255,.12)}
+  #shortcuts .sc-x svg{width:15px;height:15px;stroke:#fff;stroke-width:2;fill:none;stroke-linecap:round}
+  #shortcuts .sc-rule{width:100%;height:1px;flex:none;background:rgba(255,255,255,.26);margin:4px 0 8px}
+  #shortcuts .sc-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;width:100%;flex:1;min-height:0}
+  #shortcuts h4{margin:0 0 14px;font-size:16px;font-weight:700;letter-spacing:-.015em}
+  #shortcuts .sc-row{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+  #shortcuts .sc-label{font-size:13.5px;font-weight:700;letter-spacing:-.01em;line-height:1.4}
+  #shortcuts .sc-how{font-size:13px;font-weight:550;color:rgba(255,255,255,.6);letter-spacing:-.005em}
+  /* mouse glyph: outlined body with the button in question filled */
+  #shortcuts .msvg{width:26px;height:32px;flex:none}
+  #shortcuts .msvg .body{fill:none;stroke:rgba(255,255,255,.6);stroke-width:1.5}
+  #shortcuts .msvg .hot{fill:#fff;stroke:none}
+  #shortcuts .msvg .cool{fill:rgba(255,255,255,.3);stroke:none}
+  #shortcuts .keys{display:flex;flex-direction:column;align-items:center;gap:5px;flex:none}
+  #shortcuts .krow{display:flex;gap:5px}
+  #shortcuts .key{display:grid;place-items:center;width:30px;height:30px;border-radius:6px;
+    border:1px solid rgba(255,255,255,.55);font-size:12.5px;font-weight:700;letter-spacing:-.01em}
+  #shortcuts .key.wide{width:44px}
+
+  @media (max-width:600px){
+    #shortcuts{width:calc(100% - 24px);height:auto;max-height:calc(100% - 24px);
+      left:12px;top:12px;transform:none;overflow-y:auto}
+    #shortcuts.open{transform:none}
+    #shortcuts .sc-cols{grid-template-columns:1fr}
+  }
 
   /* measurement overlay */
   #measureLayer{position:absolute;inset:0;pointer-events:none}
@@ -510,8 +617,19 @@
     #loader .ldLogo{height:21px}
   }
 
+  /* Between these widths a 330px card centred at 75% leaves almost no right
+     margin, so it gives up centring before it gives up the split layout. */
+  @media (max-width:900px){
+    #card.docked{left:auto;right:20px;transform:translateY(-50%) scale(.97)}
+    #card.docked.show{transform:translateY(-50%)}
+  }
+
   @media (max-width:640px){
     #card{right:12px;left:12px;top:auto;bottom:12px;width:auto}
+    /* no room for a side-by-side split here — the docked card becomes the same
+       bottom sheet as every other one */
+    #card.docked{right:12px;left:12px;top:auto;bottom:12px;transform:none}
+    #card.docked.show{transform:none}
     #hint{display:none}
     #brandLabel .logo{height:22px}
     #stops{max-width:52vw;overflow-x:auto}
@@ -640,12 +758,14 @@
     <button class="cnav" id="cardNext" aria-label="Next point of interest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button>
   </div>
   <button id="cardClose"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  <button id="cardBack"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>All floors</span></button>
   <div id="cardBody">
     <div id="cardTitle">—</div>
     <div id="cardSub">—</div>
+    <div id="floorList"></div>
     <div id="cardDesc">—</div>
     <button id="launch">
-      <span>Launch 3D tours</span>
+      <span>Launch 3D tour</span>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
     </button>
   </div>
@@ -691,14 +811,76 @@
   </button>
 </div>
 
-<!-- aerial auxiliary menu: the tour's overflow, carrying the items that still
-     mean something from above. The interior-only entries (ceiling,
-     measurements, Outside) have no aerial equivalent and are left out. -->
+<!-- aerial auxiliary menu: the Showcase overflow at its real length. Only Full
+     screen and Shortcuts are wired in this prototype; the rest are present so
+     the menu reads at the right size and the two that work sit where they will
+     sit in the product. -->
 <div id="moreMenuAerial">
-  <button id="amReset"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.6-6.4M3 4v5h5"/></svg> Reset view</button>
-  <button id="amFull"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg> <span id="amFullLabel">Fullscreen</span></button>
-  <div class="sep"></div>
-  <button id="amCopy"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7"/></svg> <span id="amCopyLabel">Copy link</span></button>
+  <button class="amx"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16.5v-5M12 8h.01"/></svg> Space info</button>
+  <button class="amx"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.3-4.3"/></svg> Search</button>
+  <button class="amx"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 6.2 12 6.2 21.5 12 21.5 12 18 17.8 12 17.8 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.6"/></svg> Extras</button>
+  <button class="amx"><svg viewBox="0 0 24 24"><circle class="fill" cx="9" cy="9" r="1.3"/><circle class="fill" cx="9" cy="15" r="1.3"/><circle class="fill" cx="15" cy="9" r="1.3"/><circle class="fill" cx="15" cy="15" r="1.3"/></svg> Views</button>
+  <button class="amx"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.7 9.4a2.4 2.4 0 1 1 3.4 2.2c-.7.3-1.1.9-1.1 1.6v.3M12 17h.01"/></svg> Help</button>
+  <button class="amx"><svg viewBox="0 0 24 24"><path d="M2.5 9.2 12 5l9.5 4.2L12 13.4 2.5 9.2Z"/><path d="M6.5 11v4.2c0 1.3 2.5 2.4 5.5 2.4s5.5-1.1 5.5-2.4V11"/></svg> Tutorial</button>
+  <button id="amShortcuts"><svg viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="19" height="11" rx="2"/><path d="M6 10.2h.01M9 10.2h.01M12 10.2h.01M15 10.2h.01M18 10.2h.01M7.5 13.8h9"/></svg> Shortcuts</button>
+  <button class="amx"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5"/></svg> Terms</button>
+  <button class="amx"><svg viewBox="0 0 24 24"><rect x="2.5" y="8" width="19" height="8.6" rx="3"/><path d="M9.2 16.6l1.5-2.2h2.6l1.5 2.2"/><circle class="fill" cx="7.6" cy="12.2" r="1.1"/><circle class="fill" cx="16.4" cy="12.2" r="1.1"/></svg> VR</button>
+  <button id="amFull"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg> <span id="amFullLabel">Full screen</span></button>
+</div>
+
+<!-- Keyboard shortcuts. Centred rather than anchored to the button that opened
+     it: it is a reference panel, not a menu. The bindings listed are the ones
+     this prototype actually has — no right-drag pan, because there isn't one. -->
+<div id="shortcuts" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+  <div class="sc-head">
+    <svg viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="19" height="11" rx="2"/><path d="M6 10.2h.01M9 10.2h.01M12 10.2h.01M15 10.2h.01M18 10.2h.01M7.5 13.8h9"/></svg>
+    <span class="sc-title">Keyboard Shortcuts</span>
+    <button class="sc-x" id="scClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="sc-rule"></div>
+  <div class="sc-cols">
+    <div>
+      <h4>Navigation</h4>
+      <div class="sc-row">
+        <svg class="msvg" viewBox="0 0 26 32"><rect class="body" x="3" y="1" width="20" height="30" rx="10"/><path class="body" d="M13 1.5v9M3.6 10.5h18.8"/><circle class="hot" cx="8" cy="6" r="2.2"/></svg>
+        <span><span class="sc-label">Orbit View</span><br><span class="sc-how">Left-Click &amp; Drag</span></span>
+      </div>
+      <div class="sc-row">
+        <svg class="msvg" viewBox="0 0 26 32"><rect class="body" x="3" y="1" width="20" height="30" rx="10"/><path class="body" d="M13 1.5v9M3.6 10.5h18.8"/><rect class="hot" x="11.8" y="3.4" width="2.4" height="6" rx="1.2"/></svg>
+        <span><span class="sc-label">Zoom In &amp; Out</span><br><span class="sc-how">Scroll</span></span>
+      </div>
+      <div class="sc-row">
+        <svg class="msvg" viewBox="0 0 26 32"><rect class="body" x="3" y="1" width="20" height="30" rx="10"/><path class="body" d="M13 1.5v9M3.6 10.5h18.8"/><circle class="hot" cx="8" cy="6" r="2.2"/></svg>
+        <span><span class="sc-label">Open a Point</span><br><span class="sc-how">Left Click a marker</span></span>
+      </div>
+      <div class="sc-row">
+        <svg class="msvg" viewBox="0 0 26 32"><rect class="body" x="3" y="1" width="20" height="30" rx="10"/><path class="body" d="M13 1.5v9M3.6 10.5h18.8"/><circle class="cool" cx="8" cy="6" r="2.2"/></svg>
+        <span><span class="sc-label">Dismiss a Card</span><br><span class="sc-how">Left Click empty space</span></span>
+      </div>
+    </div>
+    <div>
+      <h4>Keyboard</h4>
+      <div class="sc-row">
+        <span class="keys">
+          <span class="krow"><span class="key">W</span></span>
+          <span class="krow"><span class="key">A</span><span class="key">S</span><span class="key">D</span></span>
+        </span>
+        <span class="sc-label">Fly Around Space</span>
+      </div>
+      <div class="sc-row">
+        <span class="keys"><span class="krow"><span class="key">Q</span><span class="key">E</span></span></span>
+        <span class="sc-label">Move Up &amp; Down</span>
+      </div>
+      <div class="sc-row">
+        <span class="keys"><span class="krow"><span class="key">[</span><span class="key">]</span></span></span>
+        <span class="sc-label">Step Through Points</span>
+      </div>
+      <div class="sc-row">
+        <span class="keys"><span class="krow"><span class="key wide">Esc</span></span></span>
+        <span class="sc-label">Close</span>
+      </div>
+    </div>
+  </div>
 </div>
 
 <button class="iconbtn" id="settingsBtn" title="Settings" aria-label="Settings">
@@ -912,6 +1094,12 @@ const M = {
   white:      new THREE.MeshStandardMaterial({color:0xffffff, metalness:0,   roughness:.55}),
   // road markings only: they take a polygonOffset the 3D white trim must not
   stripe:     new THREE.MeshStandardMaterial({color:0xf4f4f2, metalness:0,   roughness:.85}),
+  /* Floor slabs for the multi-entry x-ray. `floorIdle` renders nothing but still
+     answers a raycast, so a house stays hoverable floor by floor with nothing
+     showing until you land on one. */
+  floorIdle:  new THREE.MeshBasicMaterial({visible:false}),
+  floorHot:   new THREE.MeshStandardMaterial({color:0xfdf3e6, emissive:0xffffff,
+                emissiveIntensity:.24, metalness:.1, roughness:.4}),
   woodLight:  new THREE.MeshStandardMaterial({color:0xd9b98c, metalness:0,   roughness:.7}),
   woodDark:   new THREE.MeshStandardMaterial({color:0x8b6a45, metalness:0,   roughness:.75}),
   carpet:     new THREE.MeshStandardMaterial({color:0x40495a, metalness:0,   roughness:1}),
@@ -1083,6 +1271,21 @@ function house(cfg){
 
   // back patio
   slab(w-2, 9, M.paver, 0, Y.walk, -d/2-5, 0, g);
+
+  /* One hit/highlight slab per floor, on the two-story plans only — the ones a
+     point of interest can offer a choice of. Sized just proud of the walls so a
+     lit floor reads as that storey rather than z-fighting with the siding. */
+  const bands = [];
+  if(story === 2){
+    const fh = wallH/2;
+    for(let i=1;i<=2;i++){
+      const b = new THREE.Mesh(new THREE.BoxGeometry(w+1.0, fh*0.9, d+1.0), M.floorIdle);
+      b.position.y = (i-1)*fh + fh/2;
+      b.userData.isBand = true; b.userData.floor = i;
+      g.add(b); bands[i] = b;
+    }
+  }
+  g.userData.bands = bands; g.userData.floors = story; g.userData.fh = wallH/2;
   return g;
 }
 
@@ -1092,20 +1295,22 @@ const HOMES = [
   // west side of the spine, facing east
   {x:-52, z: 96, rotY: Math.PI/2, pal:0, story:2, w:24, d:18},
   {x:-52, z: 56, rotY: Math.PI/2, pal:1},
-  {x:-52, z: 16, rotY: Math.PI/2, pal:2, story:2},
+  {x:-52, z: 16, rotY: Math.PI/2, pal:2, story:2, key:'homesite14'},
   {x:-52, z:-24, rotY: Math.PI/2, pal:3},
   // east side of the spine, facing west
   {x: 52, z: 96, rotY:-Math.PI/2, pal:4},
   {x: 52, z: 56, rotY:-Math.PI/2, pal:5, story:2},
   {x: 52, z: 16, rotY:-Math.PI/2, pal:1},
-  {x: 52, z:-24, rotY:-Math.PI/2, pal:2, story:2, w:24, d:18},
+  {x: 52, z:-24, rotY:-Math.PI/2, pal:2, story:2, w:24, d:18, key:'homesite22'},
   // around the cul-de-sac, facing back toward it
   {x:-58, z:-118, rotY: Math.PI*0.72, pal:5},
-  {x:  0, z:-152, rotY: Math.PI,      pal:3, story:2, w:26, d:19},   // model home
+  {x:  0, z:-152, rotY: Math.PI,      pal:3, story:2, w:26, d:19, key:'model'},
   {x: 58, z:-118, rotY:-Math.PI*0.72, pal:0},
   {x: 96, z: 116, rotY:-Math.PI/2,    pal:4},
 ];
-HOMES.forEach(h=>house(h));
+// keyed so the two-story plans behind a point of interest can be found again
+const HOUSES = {};
+HOMES.forEach(h=>{ const g = house(h); if(h.key) HOUSES[h.key] = g; });
 
 /* ============================================ CAPTURE FOOTPRINT + BASEMAP
    A real capture doesn't stop on a straight line — it ends wherever the drone
@@ -1480,20 +1685,32 @@ for(let i=0;i<30;i++){
 })();
 
 
+const MULTI_SHARE = 0.55;        // fraction of the viewport width a multi-entry house gets
+
 /* Solve the orbit angle + distance that puts a POI's front elevation on screen.
    theta is derived from the facade normal; distance from the frame box and the
    camera's real FOV/aspect, so narrow windows automatically pull back. */
 function computeFocus(p){
   const vfov = camera.fov * Math.PI/180;
   const hfov = 2*Math.atan(Math.tan(vfov/2) * camera.aspect);
+  /* A multi-entry home shares the screen with its floor list, so it is framed
+     against the left share of the viewport rather than all of it: the width it
+     has to fit into shrinks and the look-at point slides right by the same
+     amount, pushing the house left without swinging the camera off its
+     elevation. */
+  const share = p.multi ? MULTI_SHARE : 1;
   const rV = (p.frame.h*0.5) / Math.tan(vfov*0.5);
-  const rH = (p.frame.w*0.5) / Math.tan(hfov*0.5);
-  return {
-    target: new THREE.Vector3(p.frame.x, p.frame.y, p.frame.z),
-    theta:  Math.atan2(p.front[0], p.front[1]) + (p.yaw||0),   // stand on the facade's side
-    phi:    p.phi || 1.15,
-    radius: clamp(Math.max(rV, rH) * 1.28, 46, 320),
-  };
+  const rH = (p.frame.w*0.5) / (Math.tan(hfov*0.5) * share);
+  const radius = clamp(Math.max(rV, rH) * 1.28, 46, 320);
+
+  const theta  = Math.atan2(p.front[0], p.front[1]) + (p.yaw||0);   // stand on the facade's side
+  const target = new THREE.Vector3(p.frame.x, p.frame.y, p.frame.z);
+  if(p.multi){
+    const off = (1 - share) * radius * Math.tan(hfov*0.5);   // screen-right on the ground
+    target.x += Math.cos(theta) * off;
+    target.z -= Math.sin(theta) * off;
+  }
+  return { target, theta, phi: p.phi || 1.15, radius };
 }
 
 /* ======================================================= POINTS OF INTEREST */
@@ -1501,21 +1718,39 @@ function computeFocus(p){
    and the box it should fill on screen (frame), so the camera always arrives
    square to the elevation rather than at an arbitrary angle. */
 const POIS = [
-  { id:'model', n:1, title:'Model Home', sub:'Plan 4 · 3,240 SF · 4 bed / 3.5 bath',
+  /* Multi-entry: a two-story plan is a choice of floor, so the frame covers the
+     whole elevation and phi drops to read it head-on. Rows carry what is on the
+     floor, not what it costs — a buyer is picking a part of a house, not a
+     tenancy. */
+  { id:'model', multi:true, n:1, title:'Model Home', sub:'Plan 4 · 3,240 SF · 4 bed / 3.5 bath',
     accent:['#ff3158','#ff7788'],
     desc:'Two-story plan on the cul-de-sac, open great room with a 20 ft ridge and a covered patio across the rear.',
     pos:new THREE.Vector3(0, 14, -152),
     front:[0, 1],                                    // faces the cul-de-sac
-    frame:{x:0, y:10, z:-150, w:52, h:34}, yaw:0.24, phi:1.12,
-    interior:'greatroom'
+    frame:{x:0, y:9, z:-150, w:48, h:28}, yaw:0.24, phi:1.30,
+    interior:'greatroom',
+    houseRef:'model',
+    floors:[
+      {n:1, label:'Floor 1', rooms:'Great room · Kitchen · Dining · Covered patio',
+       desc:'Open great room under a 20 ft ridge, kitchen with a walk-in pantry, and a covered patio across the rear.'},
+      {n:2, label:'Floor 2', rooms:'Primary suite · 3 beds · Loft',
+       desc:'Primary suite over the porch with a dual vanity and walk-in closet, three secondary bedrooms and a loft.'},
+    ]
   },
-  { id:'homesite14', n:2, title:'Homesite 14', sub:'Plan 2 · Available now',
+  { id:'homesite14', multi:true, n:2, title:'Homesite 14', sub:'Plan 2 · Available now',
     accent:['#5b7fb8','#a8c4e8'],
     desc:'Two-story elevation facing the community spine, with the primary suite over the front porch.',
     pos:new THREE.Vector3(-43, 14, 16),
     front:[1, 0],                                    // faces east onto the street
-    frame:{x:-41, y:9, z:16, w:46, h:30}, yaw:0.26, phi:1.12,
-    interior:'primary'
+    frame:{x:-41, y:8, z:16, w:44, h:26}, yaw:0.26, phi:1.30,
+    interior:'primary',
+    houseRef:'homesite14',
+    floors:[
+      {n:1, label:'Floor 1', rooms:'Great room · Kitchen · Flex room',
+       desc:'Great room opening to the kitchen, plus a flex room off the entry that works as a study or fourth bedroom.'},
+      {n:2, label:'Floor 2', rooms:'Primary suite · 2 beds',
+       desc:'Primary suite set over the front porch, with two secondary bedrooms and the laundry on the same level.'},
+    ]
   },
   { id:'clubhouse', n:3, title:'Clubhouse & Pool', sub:'Shared amenity',
     accent:['#3f9e6b','#8fd6ab'],
@@ -1532,14 +1767,21 @@ const POIS = [
     front:[0.70, 0.72],                              // open space — framed with the homes behind
     frame:{x:-112, y:4, z:72, w:80, h:40}, yaw:0, phi:0.90
   },
-  { id:'homesite22', n:5, title:'Homesite 22', sub:'Plan 4 · Move-in ready',
+  { id:'homesite22', multi:true, n:5, title:'Homesite 22', sub:'Plan 4 · Move-in ready',
     accent:['#6d4fb8','#b39ce8'],
     desc:'Largest plan on the east row, backing onto the greenbelt with a three-car garage.',
     pos:new THREE.Vector3(43, 14, -24),
     front:[-1, 0],                                   // faces west onto the street
-    frame:{x:41, y:9, z:-24, w:48, h:30}, yaw:0.28, phi:1.12,
+    frame:{x:41, y:8, z:-24, w:44, h:26}, yaw:0.28, phi:1.30,
     interior:'greatroom',
     preview:{pos:[12,4.6,9], look:[-10,2.8,-8]},
+    houseRef:'homesite22',
+    floors:[
+      {n:1, label:'Floor 1', rooms:'Great room · Kitchen · Guest suite',
+       desc:'Great room and kitchen across the rear facing the greenbelt, with a ground-floor guest suite off the entry.'},
+      {n:2, label:'Floor 2', rooms:'Primary suite · 3 beds · Bonus room',
+       desc:'Primary suite backing onto the greenbelt, three secondary bedrooms and a bonus room over the three-car garage.'},
+    ]
   },
 ];
 
@@ -1790,6 +2032,28 @@ function applyAerial(){
   camera.lookAt(target);
 }
 
+/* The building half of the floor selection. Declared up here because the
+   pointer handlers below reach for it; it is a no-op until a two-story plan is
+   the active point, so every other frame it costs one boolean. */
+const floorRay = new THREE.Raycaster();
+const floorNdc = new THREE.Vector2();
+function floorAt(cx, cy){
+  if(!ghosted || !activePOI || !activePOI.multi) return 0;
+  floorNdc.set((cx / innerWidth) * 2 - 1, -(cy / innerHeight) * 2 + 1);
+  floorRay.setFromCamera(floorNdc, camera);
+  const bands = (ghosted.userData.bands || []).filter(Boolean);
+  const hit = floorRay.intersectObjects(bands, false)[0];
+  if(!hit) return 0;
+  const n = hit.object.userData.floor;
+  return activePOI.floors.some(f=>f.n === n) ? n : 0;   // only floors the list offers
+}
+function hoverFloor(cx, cy){
+  if(!ghosted) return;
+  const n = floorAt(cx, cy);
+  if(n) setHotFloor(n);
+  dom.style.cursor = n ? 'pointer' : '';
+}
+
 /* --------------------------------------------------------- input handling */
 const dom = renderer.domElement;
 let dragging=false, lastX=0, lastY=0, moved=0;
@@ -1807,7 +2071,7 @@ dom.addEventListener('pointerdown', e=>{
   if(tourOn) setTour(false);
 });
 dom.addEventListener('pointermove', e=>{
-  if(!dragging){ hoverAt(e.clientX, e.clientY); return; }
+  if(!dragging){ hoverFloor(e.clientX, e.clientY); hoverAt(e.clientX, e.clientY); return; }
   const dx = e.clientX-lastX, dy = e.clientY-lastY;
   lastX=e.clientX; lastY=e.clientY; moved += Math.abs(dx)+Math.abs(dy);
   nudge();
@@ -1833,6 +2097,12 @@ dom.addEventListener('click', ev=>{
   setMore(false); setMoreAerial(false);
   if(measuring && rig.mode==='interior' && moved < 6){ measureAt(ev.clientX, ev.clientY); return; }
   if(rig.mode==='interior' && moved < 6 && clickSweep(ev.clientX, ev.clientY)) return;
+  // a click on a lit floor opens it, and must not fall through to closeCard
+  if(moved < 6 && rig.mode === 'aerial' && ghosted){
+    const n = floorAt(ev.clientX, ev.clientY);
+    const fl = n && activePOI.floors.find(f=>f.n === n);
+    if(fl){ showFloor(activePOI, fl); return; }
+  }
   if(moved < 6 && rig.mode === 'aerial'){ closeCard({resume:!rig.userPaused}); }
 });
 
@@ -1842,7 +2112,7 @@ dom.addEventListener('touchstart', e=>{ if(e.touches.length===2){
   pinch = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); }});
 dom.addEventListener('touchmove', e=>{ if(e.touches.length===2 && pinch){
   const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
-  nudge(); if(rig.mode==='aerial') rig.gRadius = clamp(rig.gRadius * (pinch/d), 70, 420); pinch=d; }}, {passive:true});
+  nudge(); if(rig.mode==='aerial') rig.gRadius = clamp(rig.gRadius * (pinch/d), 30, 420); pinch=d; }}, {passive:true});
 dom.addEventListener('touchend', ()=>{ pinch=null; });
 
 addEventListener('keydown', e=>{
@@ -1945,7 +2215,9 @@ function zoomBy(sign, step){
   step = step || 0.09;
   nudge();
   if(rig.mode === 'aerial')
-    rig.gRadius = clamp(rig.gRadius * (1 + sign*step), 70, 420);
+    // floor framing lands near 33, so the aerial minimum is 30 rather than 70 —
+    // otherwise the first scroll after picking a floor snaps the view back out
+    rig.gRadius = clamp(rig.gRadius * (1 + sign*step), 30, 420);
   else if(rig.mode === 'interior' && rig.view !== 'walk')
     rig.gRadius = clamp(rig.gRadius * (1 + sign*step), 14, 260);
   else if(rig.mode === 'interior'){
@@ -2017,7 +2289,9 @@ resetBtn.addEventListener('click', e=>{
   rig.gTheta  = nearestAngle(rig.gTheta, HOME.theta);   // short way round, never a spin
   rig.gPhi    = HOME.phi;
   rig.gRadius = HOME.radius;
-  rig.auto = true; rig.userPaused = false; rig.idle = 0;  // the state it opens in
+  // returns the framing, not the motion: reset is a way out of being lost, and
+  // starting the orbit on top of that would take the view somewhere new again
+  rig.auto = false; rig.userPaused = true; rig.idle = 0;
   syncPlay();
 });
 syncPlay();
@@ -2298,16 +2572,17 @@ addEventListener('keydown', e=>{
   if(e.key==='Escape' && moreMenuAerial.classList.contains('open')) setMoreAerial(false);
 });
 
-/* Reset goes back to the drone framing over the whole site. It writes the goal
-   state only, so the rig's own easing carries the move, and gTheta takes the
-   short way round instead of unwinding the orbit. */
-document.getElementById('amReset').addEventListener('click', e=>{
-  e.stopPropagation(); setMoreAerial(false);
-  camera.fov = AERIAL_FOV; camera.updateProjectionMatrix();
-  rig.gTarget.copy(HOME.target);
-  rig.gTheta  = nearestAngle(rig.gTheta, HOME.theta);
-  rig.gPhi    = HOME.phi;
-  rig.gRadius = HOME.radius;
+/* Two of the ten entries do something. Full screen is the browser's own, and
+   Shortcuts opens the centred reference panel; the other eight close the menu
+   and swallow the click, so they feel pressed without pretending to work. */
+const shortcuts = document.getElementById('shortcuts');
+function setShortcuts(open){ shortcuts.classList.toggle('open', open); }
+shortcuts.addEventListener('pointerdown', e=>e.stopPropagation());
+document.getElementById('scClose').addEventListener('click', e=>{
+  e.stopPropagation(); setShortcuts(false);
+});
+document.getElementById('amShortcuts').addEventListener('click', e=>{
+  e.stopPropagation(); setMoreAerial(false); setShortcuts(true);
 });
 document.getElementById('amFull').addEventListener('click', e=>{
   e.stopPropagation(); setMoreAerial(false);
@@ -2316,15 +2591,14 @@ document.getElementById('amFull').addEventListener('click', e=>{
 });
 addEventListener('fullscreenchange', ()=>{
   document.getElementById('amFullLabel').textContent =
-    document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
+    document.fullscreenElement ? 'Exit full screen' : 'Full screen';
 });
-// the label doubles as the confirmation, so the menu stays put long enough to read it
-document.getElementById('amCopy').addEventListener('click', async e=>{
-  e.stopPropagation();
-  const lbl = document.getElementById('amCopyLabel');
-  try{ await navigator.clipboard.writeText(location.href); lbl.textContent = 'Link copied'; }
-  catch(_){ lbl.textContent = 'Copy failed'; }
-  setTimeout(()=>{ setMoreAerial(false); lbl.textContent = 'Copy link'; }, 900);
+moreMenuAerial.querySelectorAll('button.amx').forEach(b=>{
+  b.addEventListener('click', e=>{ e.stopPropagation(); setMoreAerial(false); });
+});
+// Escape closes the panel before anything else reads the key
+addEventListener('keydown', e=>{
+  if(e.key === 'Escape' && shortcuts.classList.contains('open')) setShortcuts(false);
 });
 document.getElementById('mmReset').addEventListener('click', e=>{
   e.stopPropagation(); setMore(false);
@@ -2428,8 +2702,139 @@ function placeCardByPin(p){
   leaderLayer.classList.add('on');
 }
 
+/* ================================================ MULTI-ENTRY: FLOOR STACK
+   A two-story plan is two places behind one pin, so choosing it means choosing
+   a floor. The list in the card and the house itself are two views of the same
+   selection: hovering either lights the same floor, clicking either opens it.
+   The house ghosts back so the lit floor reads through the massing without the
+   building disappearing from under it. */
+const floorList = document.getElementById('floorList');
+const cardBack  = document.getElementById('cardBack');
+let ghosted = null, hotFloor = 0;
+
+/* Materials are shared across the community, so a house can't be faded in place
+   — it gets clones for as long as it's the focus and hands them back after. */
+function ghostHouse(g, on){
+  g.traverse(n=>{
+    if(!n.isMesh || n.userData.isBand) return;
+    if(on){
+      if(n.userData._solid) return;
+      n.userData._solid = n.material;
+      const c = Array.isArray(n.material) ? n.material.map(m=>m.clone()) : n.material.clone();
+      (Array.isArray(c) ? c : [c]).forEach(m=>{
+        m.transparent = true; m.opacity = .18; m.depthWrite = false;
+      });
+      n.material = c;
+    } else if(n.userData._solid){
+      const c = n.material;
+      n.material = n.userData._solid; delete n.userData._solid;
+      (Array.isArray(c) ? c : [c]).forEach(m=>m.dispose());
+    }
+  });
+}
+
+function clearFloors(){
+  if(ghosted){
+    ghostHouse(ghosted, false);
+    (ghosted.userData.bands || []).forEach(b=>{ if(b) b.material = M.floorIdle; });
+    ghosted = null;
+  }
+  hotFloor = 0;
+  card.classList.remove('floors','floordetail','docked');
+  floorList.innerHTML = '';
+}
+
+/* one place decides what "floor n is hot" looks like, in both views */
+function setHotFloor(n){
+  if(n === hotFloor) return;
+  hotFloor = n;
+  const bands = ghosted ? (ghosted.userData.bands || []) : [];
+  bands.forEach((b,i)=>{ if(b) b.material = (i === n) ? M.floorHot : M.floorIdle; });
+  floorList.querySelectorAll('.frow').forEach(r=>{
+    r.classList.toggle('hot', +r.dataset.floor === n);
+  });
+}
+
+function buildFloorList(p){
+  floorList.innerHTML = '';
+  for(const fl of p.floors){
+    const row = document.createElement('button');
+    row.className = 'frow';
+    row.dataset.floor = fl.n;
+    row.innerHTML = '<span class="fl">' + fl.label + '</span>'
+                  + '<span class="fsf">' + fl.rooms + '</span>';
+    row.addEventListener('pointerenter', ()=>setHotFloor(fl.n));
+    row.addEventListener('click', e=>{ e.stopPropagation(); showFloor(p, fl); });
+    floorList.appendChild(row);
+  }
+}
+// registered once, not per rebuild — otherwise each reopen stacks another
+floorList.addEventListener('pointerleave', ()=>{ if(!card.classList.contains('floordetail')) setHotFloor(0); });
+
+/* Writes a focus into the rig's goal state and lets the existing easing carry
+   the move, so every camera change here glides like a pin selection. */
+function flyTo(f){
+  rig.gTarget.copy(f.target);
+  rig.gTheta  = nearestAngle(rig.gTheta, f.theta);
+  rig.gPhi    = f.phi;
+  rig.gRadius = f.radius;
+  rig.auto = false; rig.idle = 0;
+}
+
+/* The same elevation, pushed in to one floor. Heading, tilt and the leftward
+   offset carry over from the whole-house shot — only height and distance change
+   — so it reads as moving closer, not as a cut somewhere else. Up close the
+   house gets more of the width than the full elevation does, or the width would
+   set the distance and the floor would stay a sliver. */
+function floorFocus(p, fl){
+  const g  = HOUSES[p.houseRef];
+  const fh = g.userData.fh;
+  const vfov = camera.fov * Math.PI/180;
+  const hfov = 2*Math.atan(Math.tan(vfov/2) * camera.aspect);
+  const FLOOR_SHARE = 0.80;
+  const rV = (fh * 2.1 * 0.5) / Math.tan(vfov*0.5);
+  const rH = (p.frame.w * 0.72 * 0.5) / (Math.tan(hfov*0.5) * FLOOR_SHARE);
+  const radius = clamp(Math.max(rV, rH) * 1.12, 30, 320);
+  const theta  = Math.atan2(p.front[0], p.front[1]) + (p.yaw||0);
+  const target = new THREE.Vector3(p.frame.x, (fl.n - 1)*fh + fh/2, p.frame.z);
+  const off = (1 - FLOOR_SHARE) * radius * Math.tan(hfov*0.5);
+  target.x += Math.cos(theta) * off;
+  target.z -= Math.sin(theta) * off;
+  return { target, theta, phi: p.phi || 1.30, radius };
+}
+
+/* Step two of one decision, not a new place: the card swaps its body, the
+   camera closes on the chosen floor, and that floor stays lit. */
+function showFloor(p, fl){
+  setHotFloor(fl.n);
+  flyTo(floorFocus(p, fl));
+  card.classList.remove('floors');
+  card.classList.add('floordetail');
+  document.getElementById('cardTitle').textContent = p.title + ' · ' + fl.label;
+  document.getElementById('cardSub').textContent   = fl.rooms;
+  document.getElementById('cardDesc').textContent  = fl.desc;
+  document.getElementById('launch').style.display  = '';
+}
+cardBack.addEventListener('click', e=>{
+  e.stopPropagation();
+  if(!activePOI || !activePOI.multi) return;
+  openFloorStack(activePOI);
+  flyTo(computeFocus(activePOI));   // back out to the whole elevation
+});
+
+function openFloorStack(p){
+  card.classList.remove('floordetail');
+  card.classList.add('floors');
+  document.getElementById('cardTitle').textContent = p.title;
+  document.getElementById('cardSub').textContent   = p.sub;
+  document.getElementById('launch').style.display  = 'none';
+  buildFloorList(p);
+  setHotFloor(0);
+}
+
 function selectPOI(p, opts){
   activePOI = p;
+  clearFloors();
   // a secondary point has no showcase behind it, so it offers no way in
   document.getElementById('launch').style.display = p.secondary ? 'none' : '';
   card.classList.toggle('textonly', !!p.secondary);
@@ -2441,9 +2846,23 @@ function selectPOI(p, opts){
   document.getElementById('cardSub').textContent   = p.sub;
   document.getElementById('cardDesc').textContent  = p.desc;
   paintCardArt(p);
-  placeCardByPin(p);
+
+  // a two-story plan ghosts back and offers its floors instead of one way in
+  card.classList.toggle('docked', !!p.multi);
+  if(p.multi){
+    ghosted = HOUSES[p.houseRef];
+    if(ghosted) ghostHouse(ghosted, true);
+    openFloorStack(p);
+    // inline left/top from a previously pinned card would outrank the docked
+    // rule, and `flipped` is meaningless once it stops chasing a pin
+    card.style.left = ''; card.style.top = '';
+    card.classList.remove('flipped');
+    leaderLayer.classList.remove('on');
+  } else {
+    placeCardByPin(p);
+  }
   card.classList.add('show');
-  drawLeader(p);
+  if(!p.multi) drawLeader(p);
 
   // ease the orbit around to this POI's front elevation, and pause autoplay
   const f = computeFocus(p);
@@ -2464,6 +2883,7 @@ function closeCard(opts){
   card.classList.remove('show');
   leaderLayer.classList.remove('on');
   POIS.forEach(q=>q.el.classList.remove('active'));
+  clearFloors();                 // un-ghost the house and drop any lit floor
   activePOI = null;
   if(wasOpen && opts && opts.resume && rig.mode === 'aerial' && !rig.userPaused){
     rig.auto = true; rig.idle = 0;
@@ -2803,7 +3223,7 @@ function frame(){
     rig.target.lerp(rig.gTarget, k);
     applyAerial();
     updatePins();
-    if(activePOI){
+    if(activePOI && !activePOI.multi){
       if(activePOI._screen){ placeCardByPin(activePOI); drawLeader(activePOI); }
       else leaderLayer.classList.remove('on');   // pin behind a building
     }

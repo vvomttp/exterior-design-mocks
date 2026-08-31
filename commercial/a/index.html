@@ -257,13 +257,19 @@
   /* a leased floor still x-rays on hover — you can look, you just can't tour it */
   .frow.leased .fl,.frow.leased .fsf{opacity:.55}
 
-  /* back to the stack from a chosen floor; the card never loses its place */
-  #cardBack{display:none;align-items:center;gap:5px;margin-bottom:9px;padding:0;
-    background:none;font-size:12px;font-weight:650;color:var(--muted);letter-spacing:-.005em}
-  #cardBack svg{width:14px;height:14px;stroke:currentColor;stroke-width:2.2;fill:none;
+  /* Inside a floor, the counter gives up its corner. Stepping between points is
+     the wrong move when you are one level into one of them; going back to the
+     stack is the right one, so it takes the same chip in the same place. */
+  #cardBack{position:absolute;top:10px;left:10px;height:28px;padding:0 10px 0 6px;
+    border-radius:999px;display:none;align-items:center;gap:3px;
+    background:rgba(0,0,0,.28);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    font-size:11px;font-weight:650;letter-spacing:.01em;color:#fff;
+    transition:background .14s ease}
+  #cardBack:hover{background:rgba(0,0,0,.46)}
+  #cardBack svg{width:13px;height:13px;flex:none;stroke:#fff;stroke-width:2.2;fill:none;
     stroke-linecap:round;stroke-linejoin:round}
-  #cardBack:hover{color:var(--ink)}
   #card.floordetail #cardBack{display:flex}
+  #card.floordetail #cardCount{display:none}
 
   /* ---- text-only card ----
      A secondary point has no tour, so there is no interior still to show and
@@ -448,8 +454,78 @@
   #moreMenu svg,#moreMenuAerial svg{width:15px;height:15px;stroke:rgba(255,255,255,.62);stroke-width:1.9;fill:none;
     stroke-linecap:round;stroke-linejoin:round;flex:none}
   #moreMenu .sep,#moreMenuAerial .sep{height:1px;background:rgba(255,255,255,.12);margin:5px 8px}
-  /* the aerial copy is fixed rather than absolute — it lives outside #interiorUI */
-  #moreMenuAerial{position:fixed;z-index:31;bottom:74px;right:22px}
+  /* The aerial copy is fixed rather than absolute — it lives outside #interiorUI
+     — and carries the Showcase overflow spec rather than the interior menu's:
+     195 wide, 8 padding, 8 gap, #222 at 90% behind a 5px blur and a #707070
+     hairline. Ten 32px rows plus the gaps and padding come to the 408 height the
+     spec asks for, so it is left to size itself rather than pinned. */
+  #moreMenuAerial{
+    box-sizing:border-box;
+    position:fixed;z-index:31;right:22px;bottom:74px;
+    display:flex;flex-direction:column;align-items:flex-start;
+    width:195px;padding:8px;gap:8px;
+    background:rgba(34,34,34,.9);
+    border:1px solid rgba(112,112,112,.5);
+    backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+    border-radius:8px}
+  #moreMenuAerial button{
+    display:flex;align-items:center;gap:11px;width:100%;height:32px;flex:none;
+    padding:0 8px;border-radius:6px;
+    font-size:13px;font-weight:650;color:#fff;letter-spacing:-.01em;text-align:left;
+    transition:background .14s ease}
+  #moreMenuAerial button:hover{background:rgba(255,255,255,.10)}
+  #moreMenuAerial svg{width:16px;height:16px;flex:none;
+    stroke:#fff;stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  #moreMenuAerial svg .fill{fill:#fff;stroke:none}
+
+  /* ---------- keyboard shortcuts ----------
+     A reference panel, so it is centred rather than tucked against the button
+     that opened it. */
+  #shortcuts{
+    box-sizing:border-box;
+    display:flex;flex-direction:column;align-items:flex-start;
+    padding:16px;gap:8px;
+    position:fixed;z-index:60;width:544px;height:437px;
+    left:calc(50% - 544px/2);top:calc(50% - 437px/2);
+    background:rgba(34,34,34,.9);
+    border:1px solid rgba(112,112,112,.5);
+    backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+    border-radius:12px;color:#fff;
+    opacity:0;visibility:hidden;transform:scale(.98);
+    transition:opacity .2s ease,transform .24s cubic-bezier(.22,1,.36,1),visibility 0s .24s}
+  #shortcuts.open{opacity:1;visibility:visible;transform:none;
+    transition:opacity .2s ease,transform .24s cubic-bezier(.22,1,.36,1),visibility 0s 0s}
+  #shortcuts .sc-head{display:flex;align-items:center;gap:11px;width:100%;flex:none}
+  #shortcuts .sc-head > svg{width:23px;height:23px;flex:none;stroke:#fff;stroke-width:1.6;fill:none;
+    stroke-linecap:round;stroke-linejoin:round}
+  #shortcuts .sc-title{font-size:19px;font-weight:700;letter-spacing:-.02em;flex:1}
+  #shortcuts .sc-x{width:28px;height:28px;flex:none;display:grid;place-items:center;
+    border-radius:50%;background:none;transition:background .14s ease}
+  #shortcuts .sc-x:hover{background:rgba(255,255,255,.12)}
+  #shortcuts .sc-x svg{width:15px;height:15px;stroke:#fff;stroke-width:2;fill:none;stroke-linecap:round}
+  #shortcuts .sc-rule{width:100%;height:1px;flex:none;background:rgba(255,255,255,.26);margin:4px 0 8px}
+  #shortcuts .sc-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;width:100%;flex:1;min-height:0}
+  #shortcuts h4{margin:0 0 14px;font-size:16px;font-weight:700;letter-spacing:-.015em}
+  #shortcuts .sc-row{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+  #shortcuts .sc-label{font-size:13.5px;font-weight:700;letter-spacing:-.01em;line-height:1.4}
+  #shortcuts .sc-how{font-size:13px;font-weight:550;color:rgba(255,255,255,.6);letter-spacing:-.005em}
+  /* mouse glyph: outlined body with the button in question filled */
+  #shortcuts .msvg{width:26px;height:32px;flex:none}
+  #shortcuts .msvg .body{fill:none;stroke:rgba(255,255,255,.6);stroke-width:1.5}
+  #shortcuts .msvg .hot{fill:#fff;stroke:none}
+  #shortcuts .msvg .cool{fill:rgba(255,255,255,.3);stroke:none}
+  #shortcuts .keys{display:flex;flex-direction:column;align-items:center;gap:5px;flex:none}
+  #shortcuts .krow{display:flex;gap:5px}
+  #shortcuts .key{display:grid;place-items:center;width:30px;height:30px;border-radius:6px;
+    border:1px solid rgba(255,255,255,.55);font-size:12.5px;font-weight:700;letter-spacing:-.01em}
+  #shortcuts .key.wide{width:44px}
+
+  @media (max-width:600px){
+    #shortcuts{width:calc(100% - 24px);height:auto;max-height:calc(100% - 24px);
+      left:12px;top:12px;transform:none;overflow-y:auto}
+    #shortcuts.open{transform:none}
+    #shortcuts .sc-cols{grid-template-columns:1fr}
+  }
 
   /* measurement overlay */
   #measureLayer{position:absolute;inset:0;pointer-events:none}
@@ -693,14 +769,14 @@
     <button class="cnav" id="cardNext" aria-label="Next point of interest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button>
   </div>
   <button id="cardClose"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  <button id="cardBack"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>All floors</span></button>
   <div id="cardBody">
-    <button id="cardBack"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>All floors</span></button>
     <div id="cardTitle">—</div>
     <div id="cardSub">—</div>
     <div id="floorList"></div>
     <div id="cardDesc">—</div>
     <button id="launch">
-      <span>Launch 3D tours</span>
+      <span>Launch 3D tour</span>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
     </button>
   </div>
@@ -750,10 +826,71 @@
      mean something from above. The interior-only entries (ceiling,
      measurements, Outside) have no aerial equivalent and are left out. -->
 <div id="moreMenuAerial">
-  <button id="amReset"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.6-6.4M3 4v5h5"/></svg> Reset view</button>
-  <button id="amFull"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg> <span id="amFullLabel">Fullscreen</span></button>
-  <div class="sep"></div>
-  <button id="amCopy"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7"/></svg> <span id="amCopyLabel">Copy link</span></button>
+  <button class="amx"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16.5v-5M12 8h.01"/></svg> Space info</button>
+  <button class="amx"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.3-4.3"/></svg> Search</button>
+  <button class="amx"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 6.2 12 6.2 21.5 12 21.5 12 18 17.8 12 17.8 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.6"/></svg> Extras</button>
+  <button class="amx"><svg viewBox="0 0 24 24"><circle class="fill" cx="9" cy="9" r="1.3"/><circle class="fill" cx="9" cy="15" r="1.3"/><circle class="fill" cx="15" cy="9" r="1.3"/><circle class="fill" cx="15" cy="15" r="1.3"/></svg> Views</button>
+  <button class="amx"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.7 9.4a2.4 2.4 0 1 1 3.4 2.2c-.7.3-1.1.9-1.1 1.6v.3M12 17h.01"/></svg> Help</button>
+  <button class="amx"><svg viewBox="0 0 24 24"><path d="M2.5 9.2 12 5l9.5 4.2L12 13.4 2.5 9.2Z"/><path d="M6.5 11v4.2c0 1.3 2.5 2.4 5.5 2.4s5.5-1.1 5.5-2.4V11"/></svg> Tutorial</button>
+  <button id="amShortcuts"><svg viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="19" height="11" rx="2"/><path d="M6 10.2h.01M9 10.2h.01M12 10.2h.01M15 10.2h.01M18 10.2h.01M7.5 13.8h9"/></svg> Shortcuts</button>
+  <button class="amx"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5"/></svg> Terms</button>
+  <button class="amx"><svg viewBox="0 0 24 24"><rect x="2.5" y="8" width="19" height="8.6" rx="3"/><path d="M9.2 16.6l1.5-2.2h2.6l1.5 2.2"/><circle class="fill" cx="7.6" cy="12.2" r="1.1"/><circle class="fill" cx="16.4" cy="12.2" r="1.1"/></svg> VR</button>
+  <button id="amFull"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg> <span id="amFullLabel">Full screen</span></button>
+</div>
+
+<!-- Keyboard shortcuts. Centred rather than anchored to the button that opened
+     it: it is a reference panel, not a menu. The bindings listed are the ones
+     this prototype actually has — no right-drag pan, because there isn't one. -->
+<div id="shortcuts" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+  <div class="sc-head">
+    <svg viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="19" height="11" rx="2"/><path d="M6 10.2h.01M9 10.2h.01M12 10.2h.01M15 10.2h.01M18 10.2h.01M7.5 13.8h9"/></svg>
+    <span class="sc-title">Keyboard Shortcuts</span>
+    <button class="sc-x" id="scClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="sc-rule"></div>
+  <div class="sc-cols">
+    <div>
+      <h4>Navigation</h4>
+      <div class="sc-row">
+        <svg class="msvg" viewBox="0 0 26 32"><rect class="body" x="3" y="1" width="20" height="30" rx="10"/><path class="body" d="M13 1.5v9M3.6 10.5h18.8"/><circle class="hot" cx="8" cy="6" r="2.2"/></svg>
+        <span><span class="sc-label">Orbit View</span><br><span class="sc-how">Left-Click &amp; Drag</span></span>
+      </div>
+      <div class="sc-row">
+        <svg class="msvg" viewBox="0 0 26 32"><rect class="body" x="3" y="1" width="20" height="30" rx="10"/><path class="body" d="M13 1.5v9M3.6 10.5h18.8"/><rect class="hot" x="11.8" y="3.4" width="2.4" height="6" rx="1.2"/></svg>
+        <span><span class="sc-label">Zoom In &amp; Out</span><br><span class="sc-how">Scroll</span></span>
+      </div>
+      <div class="sc-row">
+        <svg class="msvg" viewBox="0 0 26 32"><rect class="body" x="3" y="1" width="20" height="30" rx="10"/><path class="body" d="M13 1.5v9M3.6 10.5h18.8"/><circle class="hot" cx="8" cy="6" r="2.2"/></svg>
+        <span><span class="sc-label">Open a Point</span><br><span class="sc-how">Left Click a marker</span></span>
+      </div>
+      <div class="sc-row">
+        <svg class="msvg" viewBox="0 0 26 32"><rect class="body" x="3" y="1" width="20" height="30" rx="10"/><path class="body" d="M13 1.5v9M3.6 10.5h18.8"/><circle class="hot" cx="8" cy="6" r="2.2"/></svg>
+        <span><span class="sc-label">Choose a Floor</span><br><span class="sc-how">Left Click on the tower</span></span>
+      </div>
+    </div>
+    <div>
+      <h4>Keyboard</h4>
+      <div class="sc-row">
+        <span class="keys">
+          <span class="krow"><span class="key">W</span></span>
+          <span class="krow"><span class="key">A</span><span class="key">S</span><span class="key">D</span></span>
+        </span>
+        <span class="sc-label">Fly Around Space</span>
+      </div>
+      <div class="sc-row">
+        <span class="keys"><span class="krow"><span class="key">Q</span><span class="key">E</span></span></span>
+        <span class="sc-label">Move Up &amp; Down</span>
+      </div>
+      <div class="sc-row">
+        <span class="keys"><span class="krow"><span class="key">[</span><span class="key">]</span></span></span>
+        <span class="sc-label">Step Through Points</span>
+      </div>
+      <div class="sc-row">
+        <span class="keys"><span class="krow"><span class="key wide">Esc</span></span></span>
+        <span class="sc-label">Close</span>
+      </div>
+    </div>
+  </div>
 </div>
 
 <button class="iconbtn" id="settingsBtn" title="Settings" aria-label="Settings">
@@ -2242,7 +2379,9 @@ resetBtn.addEventListener('click', e=>{
   rig.gTheta  = nearestAngle(rig.gTheta, HOME.theta);   // short way round, never a spin
   rig.gPhi    = HOME.phi;
   rig.gRadius = HOME.radius;
-  rig.auto = true; rig.userPaused = false; rig.idle = 0;  // the state it opens in
+  // returns the framing, not the motion: reset is a way out of being lost, and
+  // starting the orbit on top of that would take the view somewhere new again
+  rig.auto = false; rig.userPaused = true; rig.idle = 0;
   syncPlay();
 });
 syncPlay();
@@ -2523,16 +2662,17 @@ addEventListener('keydown', e=>{
   if(e.key==='Escape' && moreMenuAerial.classList.contains('open')) setMoreAerial(false);
 });
 
-/* Reset goes back to the drone framing over the whole site. It writes the goal
-   state only, so the rig's own easing carries the move, and gTheta takes the
-   short way round instead of unwinding the orbit. */
-document.getElementById('amReset').addEventListener('click', e=>{
-  e.stopPropagation(); setMoreAerial(false);
-  camera.fov = AERIAL_FOV; camera.updateProjectionMatrix();
-  rig.gTarget.copy(HOME.target);
-  rig.gTheta  = nearestAngle(rig.gTheta, HOME.theta);
-  rig.gPhi    = HOME.phi;
-  rig.gRadius = HOME.radius;
+/* Two of the ten entries do something. Full screen is the browser's own, and
+   Shortcuts opens the centred reference panel; the other eight close the menu
+   and swallow the click, so they feel pressed without pretending to work. */
+const shortcuts = document.getElementById('shortcuts');
+function setShortcuts(open){ shortcuts.classList.toggle('open', open); }
+shortcuts.addEventListener('pointerdown', e=>e.stopPropagation());
+document.getElementById('scClose').addEventListener('click', e=>{
+  e.stopPropagation(); setShortcuts(false);
+});
+document.getElementById('amShortcuts').addEventListener('click', e=>{
+  e.stopPropagation(); setMoreAerial(false); setShortcuts(true);
 });
 document.getElementById('amFull').addEventListener('click', e=>{
   e.stopPropagation(); setMoreAerial(false);
@@ -2541,15 +2681,14 @@ document.getElementById('amFull').addEventListener('click', e=>{
 });
 addEventListener('fullscreenchange', ()=>{
   document.getElementById('amFullLabel').textContent =
-    document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
+    document.fullscreenElement ? 'Exit full screen' : 'Full screen';
 });
-// the label doubles as the confirmation, so the menu stays put long enough to read it
-document.getElementById('amCopy').addEventListener('click', async e=>{
-  e.stopPropagation();
-  const lbl = document.getElementById('amCopyLabel');
-  try{ await navigator.clipboard.writeText(location.href); lbl.textContent = 'Link copied'; }
-  catch(_){ lbl.textContent = 'Copy failed'; }
-  setTimeout(()=>{ setMoreAerial(false); lbl.textContent = 'Copy link'; }, 900);
+moreMenuAerial.querySelectorAll('button.amx').forEach(b=>{
+  b.addEventListener('click', e=>{ e.stopPropagation(); setMoreAerial(false); });
+});
+// Escape closes the panel before anything else reads the key
+addEventListener('keydown', e=>{
+  if(e.key === 'Escape' && shortcuts.classList.contains('open')) setShortcuts(false);
 });
 document.getElementById('mmReset').addEventListener('click', e=>{
   e.stopPropagation(); setMore(false);
