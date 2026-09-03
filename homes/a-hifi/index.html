@@ -738,7 +738,13 @@
     <svg viewBox="0 0 38 38" fill="none" aria-hidden="true">
       <path class="btn-bg" d="M0 19C0 8.50659 8.50659 0 19 0C29.4934 0 38 8.50659 38 19C38 29.4934 29.4934 38 19 38C8.50659 38 0 29.4934 0 19Z"/>
       <path class="btn-ring" d="M19 0.5C29.2173 0.5 37.5 8.78273 37.5 19C37.5 29.2173 29.2173 37.5 19 37.5C8.78273 37.5 0.5 29.2173 0.5 19C0.5 8.78273 8.78273 0.5 19 0.5Z"/>
-      <g class="gly" transform="translate(7,7)"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v5h5"/></g>
+      <!-- recenter crosshair rather than a refresh loop: this returns the view to
+           its origin, it does not reload or replay anything -->
+      <g class="gly" transform="translate(7,7)">
+        <circle cx="12" cy="12" r="6.2"/>
+        <path d="M12 1.8v3.3M12 18.9v3.3M1.8 12h3.3M18.9 12h3.3"/>
+      </g>
+      <circle class="glyf" cx="19" cy="19" r="1.9"/>
     </svg>
   </button>
 </div>
@@ -1042,6 +1048,8 @@ const IDLE_RESUME_MS = 5000;    // dollhouse only — the aerial orbit has a but
 /* ---------------------------------------------------------------- renderer */
 const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance',
   logarithmicDepthBuffer:true});   // six near-coplanar ground layers need the precision
+// per-material clipping, so a section cut applies to one building and not the site
+renderer.localClippingEnabled = true;
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
@@ -1100,6 +1108,10 @@ const M = {
   floorIdle:  new THREE.MeshBasicMaterial({visible:false}),
   floorHot:   new THREE.MeshStandardMaterial({color:0xfdf3e6, emissive:0xffffff,
                 emissiveIntensity:.24, metalness:.1, roughness:.4}),
+  // the floor you look down onto when a level is cut open
+  floorPlate: new THREE.MeshStandardMaterial({color:0xd9d5cd, metalness:0, roughness:.92}),
+  // interior partitions, read only once the shell is cut or made translucent
+  partition:  new THREE.MeshStandardMaterial({color:0xeceae5, metalness:0, roughness:.95}),
   trim:       new THREE.MeshStandardMaterial({color:0xf7f6f2, metalness:0,   roughness:.6}),
   frame:      new THREE.MeshStandardMaterial({color:0xe9e7e1, metalness:0,   roughness:.5}),
   gutter:     new THREE.MeshStandardMaterial({color:0xdedbd4, metalness:.25, roughness:.5}),
@@ -1648,8 +1660,46 @@ function house(cfg){
       g.add(b); bands[i] = b;
     }
   }
-  g.userData.bands = bands; g.userData.floors = story; g.userData.fh = wallH/2;
+  /* A plate per floor, shown only while that floor is the cut one, plus interior
+     partitions so the cut reveals rooms rather than an open box. The partitions
+     sit inside the wall mass and are hidden by it until the house is sectioned
+     or made translucent — exactly when you want to see them. Everything is
+     offset by the foundation course this build sits on. */
+  const plates = [];
+  if(story === 2){
+    // stopping short of the ceiling keeps the tops clear of the cut plane and
+    // reads better in plan than partitions running into the slab above
+    const fh = wallH/2, T = .34, H = fh - .9;
+    const wall = (bw, bd, x, y, z)=>{
+      const m = box(bw, H, bd, M.partition, x, y + H/2 + .3, z, g);
+      m.castShadow = false;
+      return m;
+    };
+    for(let i=1;i<=2;i++){
+      const y0 = 1.4 + (i-1)*fh;
+      const pl = new THREE.Mesh(new THREE.BoxGeometry(w+0.4, .3, d+0.4), M.floorPlate);
+      pl.position.y = y0 + .15;
+      pl.userData.isPlate = true; pl.visible = false; pl.receiveShadow = true;
+      g.add(pl); plates[i] = pl;
+
+      if(i === 1){
+        // living side open to the rear, entry and stair core toward the street
+        wall(T, d*0.52, -w*0.12, y0, -d*0.24);
+        wall(w*0.44, T,  w*0.28, y0,  d*0.06);
+        wall(T, d*0.40,  w*0.06, y0,  d*0.30);
+      } else {
+        // a corridor down the middle with rooms either side
+        wall(w*0.62, T, -w*0.06, y0,  d*0.10);
+        wall(w*0.62, T, -w*0.06, y0, -d*0.16);
+        wall(T, d*0.30,  w*0.10, y0, -d*0.30);
+        wall(T, d*0.26, -w*0.22, y0,  d*0.28);
+      }
+    }
+  }
+  g.userData.bands = bands; g.userData.plates = plates;
+  g.userData.floors = story; g.userData.fh = wallH/2;
   g.userData.base = 1.4;
+  g.userData.plan = {w, d};        // footprint, for framing a cut floor as a plan
   return g;
 }
 
@@ -2095,11 +2145,12 @@ const POIS = [
     frame:{x:0, y:10, z:-150, w:48, h:30}, yaw:0.24, phi:1.30,
     interior:'greatroom',
     houseRef:'model',
+    // top down, so moving down the list moves down the building
     floors:[
-      {n:1, label:'Floor 1', rooms:'Great room · Kitchen · Dining · Covered patio',
-       desc:'Open great room under a 20 ft ridge, kitchen with a walk-in pantry, and a covered patio across the rear.'},
       {n:2, label:'Floor 2', rooms:'Primary suite · 3 beds · Loft',
        desc:'Primary suite over the porch with a dual vanity and walk-in closet, three secondary bedrooms and a loft.'},
+      {n:1, label:'Floor 1', rooms:'Great room · Kitchen · Dining · Covered patio',
+       desc:'Open great room under a 20 ft ridge, kitchen with a walk-in pantry, and a covered patio across the rear.'},
     ]
   },
   { id:'homesite14', multi:true, n:2, title:'Homesite 14', sub:'Plan 2 · Available now',
@@ -2111,10 +2162,10 @@ const POIS = [
     interior:'primary',
     houseRef:'homesite14',
     floors:[
-      {n:1, label:'Floor 1', rooms:'Great room · Kitchen · Flex room',
-       desc:'Great room opening to the kitchen, plus a flex room off the entry that works as a study or fourth bedroom.'},
       {n:2, label:'Floor 2', rooms:'Primary suite · 2 beds',
        desc:'Primary suite set over the front porch, with two secondary bedrooms and the laundry on the same level.'},
+      {n:1, label:'Floor 1', rooms:'Great room · Kitchen · Flex room',
+       desc:'Great room opening to the kitchen, plus a flex room off the entry that works as a study or fourth bedroom.'},
     ]
   },
   { id:'clubhouse', n:3, title:'Clubhouse & Pool', sub:'Shared amenity',
@@ -2142,10 +2193,10 @@ const POIS = [
     preview:{pos:[12,4.6,9], look:[-10,2.8,-8]},
     houseRef:'homesite22',
     floors:[
-      {n:1, label:'Floor 1', rooms:'Great room · Kitchen · Guest suite',
-       desc:'Great room and kitchen across the rear facing the greenbelt, with a ground-floor guest suite off the entry.'},
       {n:2, label:'Floor 2', rooms:'Primary suite · 3 beds · Bonus room',
        desc:'Primary suite backing onto the greenbelt, three secondary bedrooms and a bonus room over the three-car garage.'},
+      {n:1, label:'Floor 1', rooms:'Great room · Kitchen · Guest suite',
+       desc:'Great room and kitchen across the rear facing the greenbelt, with a ground-floor guest suite off the entry.'},
     ]
   },
 ];
@@ -2415,7 +2466,9 @@ function floorAt(cx, cy){
 function hoverFloor(cx, cy){
   if(!ghosted) return;
   const n = floorAt(cx, cy);
-  if(n) setHotFloor(n);
+  // previewing: translucent while the pointer is on a floor, never cut
+  if(n){ setHotFloor(n); setSection(0); setXray(true); }
+  else restFloor();
   dom.style.cursor = n ? 'pointer' : '';
 }
 
@@ -3075,21 +3128,25 @@ function placeCardByPin(p){
    building disappearing from under it. */
 const floorList = document.getElementById('floorList');
 const cardBack  = document.getElementById('cardBack');
-let ghosted = null, hotFloor = 0;
+/* Two looks, not one. Pointing at a floor gives a translucent preview so you can
+   see which one you mean. Committing to a floor cuts the house at that floor's
+   ceiling and takes everything above it away — roof included — which is how a
+   real capture presents a level.
 
-/* Materials are shared across the community, so a house can't be faded in place
-   — it gets clones for as long as it's the focus and hands them back after. */
-function ghostHouse(g, on){
+   Both need the structure to own its materials, since the palettes are shared
+   across the community, so it claims clones for as long as it is the focus and
+   hands them back afterwards. */
+let ghosted = null, hotFloor = 0, pickedFloor = 0;
+let xrayOn = false, sectionOn = false;
+const sectionPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);   // keeps y <= constant
+
+function claimMaterials(g, on){
   g.traverse(n=>{
-    if(!n.isMesh || n.userData.isBand) return;
+    if(!n.isMesh || n.userData.isBand || n.userData.isPlate) return;
     if(on){
       if(n.userData._solid) return;
       n.userData._solid = n.material;
-      const c = Array.isArray(n.material) ? n.material.map(m=>m.clone()) : n.material.clone();
-      (Array.isArray(c) ? c : [c]).forEach(m=>{
-        m.transparent = true; m.opacity = .18; m.depthWrite = false;
-      });
-      n.material = c;
+      n.material = Array.isArray(n.material) ? n.material.map(m=>m.clone()) : n.material.clone();
     } else if(n.userData._solid){
       const c = n.material;
       n.material = n.userData._solid; delete n.userData._solid;
@@ -3098,13 +3155,68 @@ function ghostHouse(g, on){
   });
 }
 
+/* One place writes the current look onto those clones. DoubleSide while cut,
+   because slicing a solid mass open would otherwise leave it see-through from
+   above — these walls have no interior geometry behind them. */
+function restyle(){
+  if(!ghosted) return;
+  ghosted.traverse(n=>{
+    if(!n.isMesh || !n.userData._solid) return;
+    const mats = Array.isArray(n.material) ? n.material : [n.material];
+    for(const m of mats){
+      m.transparent = xrayOn;
+      m.opacity     = xrayOn ? .18 : 1;
+      m.depthWrite  = !xrayOn;
+      m.side        = sectionOn ? THREE.DoubleSide : THREE.FrontSide;
+      const planes  = sectionOn ? [sectionPlane] : null;
+      // a change in plane count recompiles the shader, so it has to be flagged
+      if(!!m.clippingPlanes !== !!planes) m.needsUpdate = true;
+      m.clippingPlanes = planes;
+    }
+  });
+}
+
+function paintBands(){
+  const bands = ghosted ? (ghosted.userData.bands || []) : [];
+  // the cut says which floor it is, so the marker steps aside once one is chosen
+  bands.forEach((b,i)=>{ if(b) b.material = (i === hotFloor && !sectionOn) ? M.floorHot : M.floorIdle; });
+}
+
+function setXray(on){ if(xrayOn !== on){ xrayOn = on; restyle(); } }
+
+/* The cut sits a hair under the ceiling rather than on it. At the top floor the
+   plane would otherwise land exactly on the wall cap, the eave and the roof
+   base at once, and a face coplanar with a clip plane flickers per pixel as the
+   interpolated distance rounds either side of zero. */
+const CUT_EPS = 0.08;
+
+function setSection(n){
+  const on = n > 0;
+  if(on && ghosted) sectionPlane.constant = (ghosted.userData.base || 0) + n * ghosted.userData.fh - CUT_EPS;
+  if(sectionOn !== on){ sectionOn = on; restyle(); }
+  // a plate stands in for the floor you would otherwise look straight through
+  const plates = ghosted ? (ghosted.userData.plates || []) : [];
+  plates.forEach((p,i)=>{ if(p) p.visible = on && i === n; });
+  paintBands();
+}
+
+/* The resting state: whatever floor has been chosen, cut and solid — or the
+   whole house intact if none has. Everything that stops pointing lands here. */
+function restFloor(){
+  setHotFloor(pickedFloor);
+  setXray(false);
+  setSection(pickedFloor);
+}
+
 function clearFloors(){
   if(ghosted){
-    ghostHouse(ghosted, false);
+    setXray(false);
+    setSection(0);
+    claimMaterials(ghosted, false);
     (ghosted.userData.bands || []).forEach(b=>{ if(b) b.material = M.floorIdle; });
     ghosted = null;
   }
-  hotFloor = 0;
+  hotFloor = 0; pickedFloor = 0;
   card.classList.remove('floors','floordetail','docked');
   floorList.innerHTML = '';
 }
@@ -3113,8 +3225,7 @@ function clearFloors(){
 function setHotFloor(n){
   if(n === hotFloor) return;
   hotFloor = n;
-  const bands = ghosted ? (ghosted.userData.bands || []) : [];
-  bands.forEach((b,i)=>{ if(b) b.material = (i === n) ? M.floorHot : M.floorIdle; });
+  paintBands();
   floorList.querySelectorAll('.frow').forEach(r=>{
     r.classList.toggle('hot', +r.dataset.floor === n);
   });
@@ -3128,13 +3239,13 @@ function buildFloorList(p){
     row.dataset.floor = fl.n;
     row.innerHTML = '<span class="fl">' + fl.label + '</span>'
                   + '<span class="fsf">' + fl.rooms + '</span>';
-    row.addEventListener('pointerenter', ()=>setHotFloor(fl.n));
+    row.addEventListener('pointerenter', ()=>{ setHotFloor(fl.n); setSection(0); setXray(true); });
     row.addEventListener('click', e=>{ e.stopPropagation(); showFloor(p, fl); });
     floorList.appendChild(row);
   }
 }
 // registered once, not per rebuild — otherwise each reopen stacks another
-floorList.addEventListener('pointerleave', ()=>{ if(!card.classList.contains('floordetail')) setHotFloor(0); });
+floorList.addEventListener('pointerleave', restFloor);
 
 /* Writes a focus into the rig's goal state and lets the existing easing carry
    the move, so every camera change here glides like a pin selection. */
@@ -3146,31 +3257,58 @@ function flyTo(f){
   rig.auto = false; rig.idle = 0;
 }
 
-/* The same elevation, pushed in to one floor. Heading, tilt and the leftward
-   offset carry over from the whole-house shot — only height and distance change.
-   The look-at height includes the foundation course this build sits on, so it
-   lands on the floor rather than below it. */
+/* The whole-house shot pushed in to one floor and tilted down. Heading and the
+   leftward offset carry over; height, distance and tilt change. The look-at
+   height includes the foundation course this build sits on, so it lands on the
+   floor rather than below it. */
 function floorFocus(p, fl){
-  const g  = HOUSES[p.houseRef];
-  const fh = g.userData.fh, base = g.userData.base || 0;
+  const g    = HOUSES[p.houseRef];
+  const fh   = g.userData.fh, base = g.userData.base || 0;
+  const plan = g.userData.plan || {w:p.frame.w*0.7, d:p.frame.w*0.55};
   const vfov = camera.fov * Math.PI/180;
   const hfov = 2*Math.atan(Math.tan(vfov/2) * camera.aspect);
-  const FLOOR_SHARE = 0.80;
-  const rV = (fh * 2.1 * 0.5) / Math.tan(vfov*0.5);
-  const rH = (p.frame.w * 0.72 * 0.5) / (Math.tan(hfov*0.5) * FLOOR_SHARE);
-  const radius = clamp(Math.max(rV, rH) * 1.12, 30, 320);
+  const FLOOR_SHARE = 0.78;
+  /* A cut floor is a plan, not an elevation, so the camera tilts down to read it
+     from above the way the aerial tours do. PHI is measured off vertical: 0.86
+     puts the eye about 40° above the horizon — steep enough to see the layout
+     through the cut, shallow enough to keep the facade and the street legible. */
+  const phi = 0.86;
+  // worst case the house is turned corner-on, so frame the footprint diagonal
+  const span = Math.hypot(plan.w, plan.d);
+  /* The section leaves a stump: everything from the ground up to the cut is
+     still standing, and that whole stump is the subject — not the one storey.
+     So frame its height and aim at its middle. CONTEXT caps how much of a tall
+     stack gets framed; two storeys and the foundation always fit inside it. */
+  const CONTEXT = 2.9;
+  const cut    = base + fl.n * fh;                       // top of what survives
+  const framed = Math.min(cut, CONTEXT * fh);            // vertical band to fit
+  // seen from that tilt, the plan foreshortens and the walls add their own height
+  const tall = span * Math.cos(phi) + framed * Math.sin(phi);
+  const rV = (tall * 0.5) / Math.tan(vfov*0.5);
+  const rH = (span * 0.5) / (Math.tan(hfov*0.5) * FLOOR_SHARE);
+  const radius = clamp(Math.max(rV, rH) * 1.18, 34, 320);
   const theta  = Math.atan2(p.front[0], p.front[1]) + (p.yaw||0);
-  const target = new THREE.Vector3(p.frame.x, base + (fl.n - 1)*fh + fh/2, p.frame.z);
+  /* Aim at the house itself, not at p.frame. That anchor sits a dozen units in
+     front of the house because it was tuned for a near-level elevation, where
+     the difference is invisible. Tilted down 40° it is not: looking down, a
+     point further away sits higher in frame, so aiming short of the subject
+     threw the whole house up past the top edge. */
+  const c = new THREE.Vector3(); g.getWorldPosition(c);
+  const target = new THREE.Vector3(c.x, cut - framed*0.5, c.z);
   const off = (1 - FLOOR_SHARE) * radius * Math.tan(hfov*0.5);
   target.x += Math.cos(theta) * off;
   target.z -= Math.sin(theta) * off;
-  return { target, theta, phi: p.phi || 1.30, radius };
+  return { target, theta, phi, radius };
 }
 
 /* Step two of one decision, not a new place: the card swaps its body, the
    camera closes on the chosen floor, and that floor stays lit. */
 function showFloor(p, fl){
+  // committing cuts the house at this floor's ceiling: no roof, nothing above it
+  pickedFloor = fl.n;
   setHotFloor(fl.n);
+  setXray(false);
+  setSection(fl.n);
   flyTo(floorFocus(p, fl));
   card.classList.remove('floors');
   card.classList.add('floordetail');
@@ -3187,6 +3325,8 @@ cardBack.addEventListener('click', e=>{
 });
 
 function openFloorStack(p){
+  pickedFloor = 0;                  // back to the stack means nothing is chosen
+  restFloor();                      // ...so the house comes back whole
   card.classList.remove('floordetail');
   card.classList.add('floors');
   document.getElementById('cardTitle').textContent = p.title;
@@ -3214,8 +3354,10 @@ function selectPOI(p, opts){
   // a two-story plan ghosts back and offers its floors instead of one way in
   card.classList.toggle('docked', !!p.multi);
   if(p.multi){
+    // the house takes ownership of its materials here so it can be styled alone,
+    // but it stays whole and solid until a floor is pointed at
     ghosted = HOUSES[p.houseRef];
-    if(ghosted) ghostHouse(ghosted, true);
+    if(ghosted) claimMaterials(ghosted, true);
     openFloorStack(p);
     // inline left/top from a previously pinned card would outrank the docked
     // rule, and `flipped` is meaningless once it stops chasing a pin

@@ -4,10 +4,11 @@
 
   Layout, relative to this file:
       index.html                 ← this page
-      commercial/a/index.html    ← commercial · Strategy A: pin based
-      commercial/b/index.html    ← commercial · Strategy B: simplified
-      homes/a/index.html         ← residential · Strategy A: pin based
-      homes/b/index.html         ← residential · Strategy B: simplified
+      commercial/a/index.html    ← commercial · multi entry points
+      commercial/b/index.html    ← commercial · single entry
+      homes/a/index.html         ← residential · multi entry points
+      homes/b/index.html         ← residential · single entry
+      homes/a-hifi/index.html    ← residential · fidelity test
 
   All links are relative, so this works at the repo root or inside a
   subfolder. If you move a prototype, update the href on its card below.
@@ -46,7 +47,9 @@
       radial-gradient(600px 400px at 85% 105%, rgba(120,90,255,.10), transparent 70%);
   }
 
-  main{width:100%;max-width:1080px;position:relative}
+  /* narrower again now the cards are a title and a chevron: at 1080 the two
+     columns stretched into mostly empty space */
+  main{width:100%;max-width:840px;position:relative}
 
   h1{
     font-size:clamp(30px,6vw,44px);line-height:1.1;letter-spacing:-.03em;
@@ -70,9 +73,7 @@
     stroke-linecap:round;stroke-linejoin:round}
 
   a.card{
-    /* the cards carry a Q&A block now, so they top-align rather than centre —
-       otherwise the badge floats to the middle of a tall card */
-    display:flex;align-items:flex-start;gap:18px;width:100%;
+    display:flex;align-items:center;gap:18px;width:100%;
     padding:22px 24px;border-radius:16px;text-decoration:none;color:inherit;
     background:var(--card);border:1px solid var(--line);
     transition:background .18s ease,border-color .18s ease,transform .18s cubic-bezier(.22,1,.36,1);
@@ -83,7 +84,6 @@
   .badge{
     width:44px;height:44px;flex:none;border-radius:12px;
     display:grid;place-items:center;
-    font-size:16px;font-weight:700;letter-spacing:-.02em;
     background:linear-gradient(150deg,rgba(90,169,255,.30),rgba(90,169,255,.10));
     border:1px solid rgba(90,169,255,.35);color:#cfe4ff;
   }
@@ -91,23 +91,22 @@
     background:linear-gradient(150deg,rgba(160,120,255,.30),rgba(160,120,255,.10));
     border-color:rgba(160,120,255,.35);color:#ded0ff;
   }
+  /* glyphs inherit the badge's own colour, so each variant tints itself */
+  .badge svg{width:21px;height:21px;display:block;
+    stroke:currentColor;stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .badge svg .solid{fill:currentColor;stroke:none}
 
   .txt{min-width:0;flex:1}
   /* both are spans, so they need to be blocks to stack — inline elements would
      run together on one line and ignore the margin */
+  /* the letter people actually say out loud, kept as a quiet eyebrow rather than
+     inside the title — the title now says when to reach for each one */
+  .eyebrow{display:block;font-size:10.5px;font-weight:700;letter-spacing:.13em;
+    text-transform:uppercase;color:rgba(141,155,176,.8);margin-bottom:3px}
   .name{display:block;font-size:16.5px;font-weight:650;letter-spacing:-.015em;line-height:1.3}
   .desc{display:block;font-size:14px;color:var(--muted);margin-top:6px;line-height:1.5}
 
-  /* ---- the case for each prototype, in Q&A form ---- */
-  /* `.a` is already the Strategy-A card modifier, hence the qa- prefix here */
-  .qa{display:block;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
-  .qa-row{display:block;margin-top:10px}
-  .qa-row:first-child{margin-top:0}
-  .qa-q{display:block;font-size:11px;font-weight:700;letter-spacing:.10em;
-    text-transform:uppercase;color:rgba(141,155,176,.78)}
-  .qa-a{display:block;font-size:14px;line-height:1.55;color:#ccd6e2;margin-top:4px}
-
-  .chev{width:18px;height:18px;flex:none;margin-top:14px;
+  .chev{width:18px;height:18px;flex:none;
     stroke:var(--muted);stroke-width:2;fill:none;
     stroke-linecap:round;stroke-linejoin:round;transition:stroke .18s,transform .18s}
   a.card:hover .chev{stroke:var(--text);transform:translateX(3px)}
@@ -136,7 +135,6 @@
   @media (max-width:520px){
     a.card{padding:18px;gap:14px}
     .badge{width:38px;height:38px;font-size:14px}
-    .qa-a{font-size:13.5px}
   }
 </style>
 </head>
@@ -171,28 +169,30 @@
   <ul>
     <li>
       <a class="card a" href="commercial/a/index.html">
-        <span class="badge">A</span>
+        <span class="badge">
+          <!-- three markers: the strategy in one glyph, drawn as the kite the
+               prototypes actually use rather than a generic map pin -->
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path class="solid" d="M5.6 6.2l2.3 2.8-2.3 6.6-2.3-6.6z"/>
+            <path class="solid" d="M18.4 6.2l2.3 2.8-2.3 6.6-2.3-6.6z"/>
+            <path class="solid" d="M12 3.2l3 3.6-3 9.2-3-9.2z"/>
+          </svg>
+        </span>
         <span class="txt">
-          <span class="name">Strategy A: Multi entry points</span>
-          <span class="qa">
-            <span class="qa-row"><span class="qa-q">What problem does it solve?</span><span class="qa-a">For commercial spaces, there are various entry points and amenities that can&rsquo;t be represented in one entry point.</span></span>
-            <span class="qa-row"><span class="qa-q">How does it affect the user?</span><span class="qa-a">Allows for user initiated discoverability, and provides an overview of what the property contains.</span></span>
-            <span class="qa-row"><span class="qa-q">Why is it better than the alternative?</span><span class="qa-a">B shows one interior. Here a pin is <strong>a space within one asset</strong> &mdash; lobby, pavilion, garage &mdash; each with its own details.</span></span>
-          </span>
+          <span class="name">For multi-space properties</span>
         </span>
         <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
       </a>
     </li>
     <li>
       <a class="card b" href="commercial/b/index.html">
-        <span class="badge">B</span>
+        <span class="badge">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path class="solid" d="M12 3l4 4.8-4 13.2-4-13.2z"/>
+          </svg>
+        </span>
         <span class="txt">
-          <span class="name">Strategy B: Single entry</span>
-          <span class="qa">
-            <span class="qa-row"><span class="qa-q">What problem does it solve?</span><span class="qa-a">Many listings have a single space worth showing. Pins would add choices the property doesn&rsquo;t have.</span></span>
-            <span class="qa-row"><span class="qa-q">How does it affect the user?</span><span class="qa-a">One button to go inside. The aerial orbit establishes context first.</span></span>
-            <span class="qa-row"><span class="qa-q">Why is it better than the alternative?</span><span class="qa-a">Simpler scope for single-structure properties, and lower engineering effort to implement.</span></span>
-          </span>
+          <span class="name">For single-space properties</span>
         </span>
         <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
       </a>
@@ -210,37 +210,49 @@
   <ul>
     <li>
       <a class="card a" href="homes/a/index.html">
-        <span class="badge">A</span>
+        <span class="badge">
+          <!-- three markers: the strategy in one glyph, drawn as the kite the
+               prototypes actually use rather than a generic map pin -->
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path class="solid" d="M5.6 6.2l2.3 2.8-2.3 6.6-2.3-6.6z"/>
+            <path class="solid" d="M18.4 6.2l2.3 2.8-2.3 6.6-2.3-6.6z"/>
+            <path class="solid" d="M12 3.2l3 3.6-3 9.2-3-9.2z"/>
+          </svg>
+        </span>
         <span class="txt">
-          <span class="name">Strategy A: Multi entry points</span>
-          <span class="qa">
-            <span class="qa-row"><span class="qa-q">What problem does it solve?</span><span class="qa-a">Home buyers, developers, and builders can evaluate the environmental context of the whole community, then drill into individual structures &mdash; the 1:many case a single entry point can&rsquo;t serve.</span></span>
-            <span class="qa-row"><span class="qa-q">How does it affect the user?</span><span class="qa-a">Compares homesites in place, and sees where each one sits relative to the amenities.</span></span>
-            <span class="qa-row"><span class="qa-q">Why is it better than the alternative?</span><span class="qa-a">B covers one model home. Here a pin is <strong>a parcel, not a room</strong>.</span></span>
-          </span>
+          <!-- a home isn't a "space": residential keeps the same framing in its
+               own vocabulary, which also preserves the parcel/asset distinction -->
+          <span class="name">For multi-home communities</span>
         </span>
         <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
       </a>
     </li>
     <li>
       <a class="card b" href="homes/b/index.html">
-        <span class="badge">B</span>
+        <span class="badge">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path class="solid" d="M12 3l4 4.8-4 13.2-4-13.2z"/>
+          </svg>
+        </span>
         <span class="txt">
-          <span class="name">Strategy B: Single entry</span>
-          <span class="qa">
-            <span class="qa-row"><span class="qa-q">What problem does it solve?</span><span class="qa-a">A single home with one capture has nothing to choose between.</span></span>
-            <span class="qa-row"><span class="qa-q">How does it affect the user?</span><span class="qa-a">Orbits the lot to read street, neighbors and setback, then goes inside.</span></span>
-            <span class="qa-row"><span class="qa-q">Why is it better than the alternative?</span><span class="qa-a">Simpler scope for single-structure properties, and lower engineering effort to implement.</span></span>
-          </span>
+          <span class="name">For single-home listings</span>
         </span>
         <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
       </a>
     </li>
     <li class="wide">
       <a class="card a" href="homes/a-hifi/index.html">
-        <span class="badge">A+</span>
+        <span class="badge">
+          <!-- half-shaded sphere: this card is about how the scene is rendered,
+               not about how many ways there are into it -->
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.2"/>
+            <path class="solid" d="M12 3.8a8.2 8.2 0 0 1 0 16.4z"/>
+          </svg>
+        </span>
         <span class="txt">
-          <span class="name">Strategy A: Fidelity test</span>
+          <span class="eyebrow">Aside</span>
+          <span class="name">Rendering study</span>
           <span class="desc">Same interaction as A, with sky-based reflections and procedural material maps — open beside A to compare</span>
         </span>
         <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>

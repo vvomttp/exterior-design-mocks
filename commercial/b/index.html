@@ -58,10 +58,13 @@
   #enterBtn > svg{width:90px;height:38px}
 
   /* transport glyphs are solid shapes, not outlines */
-  #playBtn .btn-fg{fill:#fff}
-  #playBtn .ico-play{display:none}
-  #playBtn.paused .ico-pause{display:none}
-  #playBtn.paused .ico-play{display:block}
+  /* orbit glyph, matching Strategy A: stroked ellipse with a filled centre, and
+     the shared .on inversion when the orbit is actually running */
+  .iconbtn .gly{fill:none;stroke:#fff;stroke-width:1.9;
+    stroke-linecap:round;stroke-linejoin:round}
+  .iconbtn .glyf{fill:#fff}
+  .iconbtn.on .gly{stroke:#333}
+  .iconbtn.on .glyf{fill:#333}
   /* the aerial view carries the Matterport lockup on its own, no pill.
      A drop shadow keeps the white artwork readable against the bright sky. */
   #brandLabel .logo{height:27px;width:auto;display:block;
@@ -515,13 +518,14 @@
     <path class="btn-fg" fill-rule="evenodd" clip-rule="evenodd" d="M70.0895 13.4102L68.9109 14.5887L73.3217 18.9994L68.9109 23.4102L70.0895 24.5887L75.6787 18.9994L70.0895 13.4102Z"/>
     </svg>
   </button>
-  <button class="iconbtn" id="playBtn" title="Pause orbit" aria-label="Pause orbit" aria-pressed="false">
+  <!-- the same orbit control Strategy A carries: one toggle that reports whether
+       the orbit is running, rather than a transport play/pause -->
+  <button class="iconbtn" id="orbitBtn" title="Auto orbit" aria-label="Auto orbit" aria-pressed="true">
     <svg viewBox="0 0 38 38" fill="none" aria-hidden="true">
       <path class="btn-bg" d="M0 19C0 8.50659 8.50659 0 19 0C29.4934 0 38 8.50659 38 19C38 29.4934 29.4934 38 19 38C8.50659 38 0 29.4934 0 19Z"/>
       <path class="btn-ring" d="M19 0.5C29.2173 0.5 37.5 8.78273 37.5 19C37.5 29.2173 29.2173 37.5 19 37.5C8.78273 37.5 0.5 29.2173 0.5 19C0.5 8.78273 8.78273 0.5 19 0.5Z"/>
-      <rect class="btn-fg ico-pause" x="14" y="11.5" width="3.2" height="15" rx="1.2"/>
-      <rect class="btn-fg ico-pause" x="20.8" y="11.5" width="3.2" height="15" rx="1.2"/>
-      <path class="btn-fg ico-play" d="M15 11.6v14.8L27 19z"/>
+      <ellipse class="gly" cx="19" cy="19" rx="9.6" ry="4.6" transform="rotate(-24 19 19)"/>
+      <circle class="glyf" cx="19" cy="19" r="2.7"/>
     </svg>
   </button>
 </div>
@@ -1693,7 +1697,7 @@ function fade(to, ms){
 
 const enterBtn = document.getElementById('enterBtn');
 const aerialBar = document.getElementById('aerialBar');
-const playBtn = document.getElementById('playBtn');
+const orbitBtn = document.getElementById('orbitBtn');
 const brandLabel = document.getElementById('brandLabel');
 const aerialRight = document.getElementById('aerialRight');
 aerialBar.addEventListener('pointerdown', e=>e.stopPropagation());
@@ -1772,19 +1776,20 @@ function zoomBy(sign, step){
 
 /* Orbit playback. A deliberate pause is stickier than the automatic one: the
    idle timer must not quietly start the orbit again behind the user's back. */
+/* ---- orbit ---------------------------------------------------------------
+   Same control as Strategy A: the button reports whether the orbit is running
+   rather than owning it, so anything that stops the orbit — a drag, entering the
+   tour — unlights it on the next frame and it can never claim to be running when
+   it isn't. Strategy B has no points to tour, so this is the only transport it
+   needs; there is no play/pause. */
 function syncPlay(){
-  const paused = !rig.auto;
-  playBtn.classList.toggle('paused', paused);
-  playBtn.setAttribute('aria-pressed', paused ? 'true' : 'false');
-  playBtn.setAttribute('aria-label', paused ? 'Play orbit' : 'Pause orbit');
-  playBtn.setAttribute('title',      paused ? 'Play orbit' : 'Pause orbit');
+  orbitBtn.classList.toggle('on', rig.auto);
+  orbitBtn.setAttribute('aria-pressed', rig.auto ? 'true' : 'false');
 }
-playBtn.addEventListener('click', e=>{
+orbitBtn.addEventListener('click', e=>{
   e.stopPropagation();
-  const running = rig.auto;
-  rig.auto = !running;
-  rig.userPaused = running;      // set only when this click is what paused it
-  rig.idle = 0;
+  const on = !rig.auto;
+  rig.auto = on; rig.userPaused = !on; rig.idle = 0;
   syncPlay();
 });
 syncPlay();
@@ -2307,11 +2312,10 @@ function frame(){
   if(rig.auto !== lastAuto){ lastAuto = rig.auto; syncPlay(); }
 
   if(rig.mode === 'aerial'){
-    // idle → resume autoplay
-    if(!rig.auto){
-      rig.idle += dt*1000;
-      if(!rig.userPaused && rig.idle >= IDLE_RESUME_MS){ rig.auto = true; rig.idle = 0; }
-    }
+    // The orbit no longer restarts itself: it has an explicit button now, and a
+    // control that switches itself back on is a control you can't trust. Matches
+    // Strategy A.
+    if(!rig.auto) rig.idle += dt*1000;
     if(rig.auto){
       rig.gTheta += dt * 0.075;          // ~4.3°/s, a full turn in ~84s
       // ease back to the campus-wide framing when autoplay takes over again

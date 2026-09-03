@@ -749,7 +749,13 @@
     <svg viewBox="0 0 38 38" fill="none" aria-hidden="true">
       <path class="btn-bg" d="M0 19C0 8.50659 8.50659 0 19 0C29.4934 0 38 8.50659 38 19C38 29.4934 29.4934 38 19 38C8.50659 38 0 29.4934 0 19Z"/>
       <path class="btn-ring" d="M19 0.5C29.2173 0.5 37.5 8.78273 37.5 19C37.5 29.2173 29.2173 37.5 19 37.5C8.78273 37.5 0.5 29.2173 0.5 19C0.5 8.78273 8.78273 0.5 19 0.5Z"/>
-      <g class="gly" transform="translate(7,7)"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v5h5"/></g>
+      <!-- recenter crosshair rather than a refresh loop: this returns the view to
+           its origin, it does not reload or replay anything -->
+      <g class="gly" transform="translate(7,7)">
+        <circle cx="12" cy="12" r="6.2"/>
+        <path d="M12 1.8v3.3M12 18.9v3.3M1.8 12h3.3M18.9 12h3.3"/>
+      </g>
+      <circle class="glyf" cx="19" cy="19" r="1.9"/>
     </svg>
   </button>
 </div>
@@ -1053,6 +1059,8 @@ const IDLE_RESUME_MS = 5000;    // dollhouse only — the aerial orbit has a but
 /* ---------------------------------------------------------------- renderer */
 const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance',
   logarithmicDepthBuffer:true});   // near-coplanar ground layers need the precision
+// per-material clipping, so a section cut applies to one building and not the site
+renderer.localClippingEnabled = true;
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
@@ -1110,6 +1118,10 @@ const M = {
   floorIdle:  new THREE.MeshBasicMaterial({visible:false}),
   floorHot:   new THREE.MeshStandardMaterial({color:0xeaf1fb, emissive:0xffffff,
                 emissiveIntensity:.22, metalness:.35, roughness:.28}),
+  // the floor you look down onto when a level is cut open
+  floorPlate: new THREE.MeshStandardMaterial({color:0xd9d5cd, metalness:0, roughness:.92}),
+  // service core and demising walls, read only once the shaft is cut open
+  partition:  new THREE.MeshStandardMaterial({color:0xe6e4df, metalness:0, roughness:.95}),
   woodLight:  new THREE.MeshStandardMaterial({color:0xd9b98c, metalness:0,   roughness:.7}),
   woodDark:   new THREE.MeshStandardMaterial({color:0x8b6a45, metalness:0,   roughness:.75}),
   carpet:     new THREE.MeshStandardMaterial({color:0x40495a, metalness:0,   roughness:1}),
@@ -1298,9 +1310,41 @@ function tower(cfg){
     g.add(b);
     bands[i] = b;
   }
+  /* A plate per floor, shown only while that floor is the cut one. The shaft is
+     a solid mass with nothing modelled inside it, so a section would otherwise
+     look straight through to the sky — the plate gives the cut a floor. */
+  const plates = [];
+  for(let i=1;i<=floors;i++){
+    const pl = new THREE.Mesh(new THREE.BoxGeometry(w+0.5, .35, d+0.5), M.floorPlate);
+    pl.position.y = 6 + (i-1)*fh + .18;
+    pl.userData.isPlate = true; pl.visible = false; pl.receiveShadow = true;
+    g.add(pl); plates[i] = pl;
+  }
+  /* A service core and demising walls on every floor, so a cut storey reads as a
+     tenanted plate rather than an empty tray. They sit inside the glass and are
+     hidden by it until the shaft is sectioned or made translucent. */
+  {
+    const T = .5, H = fh - .9;
+    const part = (bw, bd, x, y, z)=>{
+      const m = new THREE.Mesh(new THREE.BoxGeometry(bw, H, bd), M.partition);
+      m.position.set(x, y + H/2 + .35, z);
+      m.receiveShadow = true;
+      g.add(m);
+    };
+    for(let i=1;i<=floors;i++){
+      const y0 = 6 + (i-1)*fh;
+      part(w*0.28, d*0.30, -w*0.04, y0, 0);            // elevator and stair core
+      part(T, d*0.34,  w*0.22, y0,  d*0.24);           // demising wall, east suite
+      part(w*0.34, T, -w*0.26, y0, -d*0.22);           // demising wall, west suite
+    }
+  }
+
   g.userData.bands = bands;
+  g.userData.plates = plates;
   g.userData.floors = floors;
   g.userData.fh = fh;
+  g.userData.plan = {w, d};        // footprint, for framing a cut floor as a plan
+  g.userData.base = 6;              // podium height: floor n spans base + (n-1)*fh
 
   // entrance canopy on +Z face
   const can = box(cfg.canopyW||22, .7, 9, M.white, 0, 7.6, d/2+7, g);
@@ -2137,7 +2181,9 @@ function floorAt(cx, cy){
 function hoverFloor(cx, cy){
   if(!ghosted) return;
   const n = floorAt(cx, cy);
-  if(n) setHotFloor(n);
+  // previewing: translucent while the pointer is on a floor, never cut
+  if(n){ setHotFloor(n); setSection(0); setXray(true); }
+  else restFloor();
   dom.style.cursor = n ? 'pointer' : '';
 }
 
@@ -2801,21 +2847,25 @@ function placeCardByPin(p){
 const TOWERS = { north: northTower, south: southTower };
 const floorList = document.getElementById('floorList');
 const cardBack  = document.getElementById('cardBack');
-let ghosted = null, hotFloor = 0;
+/* Two looks, not one. Pointing at a floor gives a translucent preview so you can
+   see which one you mean. Committing to a floor cuts the tower at that floor's
+   ceiling and takes everything above it away — roof, plant, every floor over it
+   — which is how a real capture presents a level.
 
-/* Materials are shared across the campus, so a tower can't be faded in place —
-   it gets clones for as long as it's the focus and hands them back after. */
-function ghostTower(g, on){
+   Both need the structure to own its materials, since the palettes are shared
+   across the campus, so it claims clones for as long as it is the focus and
+   hands them back afterwards. */
+let ghosted = null, hotFloor = 0, pickedFloor = 0;
+let xrayOn = false, sectionOn = false;
+const sectionPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);   // keeps y <= constant
+
+function claimMaterials(g, on){
   g.traverse(n=>{
-    if(!n.isMesh || n.userData.isBand) return;
+    if(!n.isMesh || n.userData.isBand || n.userData.isPlate) return;
     if(on){
       if(n.userData._solid) return;
       n.userData._solid = n.material;
-      const c = Array.isArray(n.material) ? n.material.map(m=>m.clone()) : n.material.clone();
-      (Array.isArray(c) ? c : [c]).forEach(m=>{
-        m.transparent = true; m.opacity = .17; m.depthWrite = false;
-      });
-      n.material = c;
+      n.material = Array.isArray(n.material) ? n.material.map(m=>m.clone()) : n.material.clone();
     } else if(n.userData._solid){
       const c = n.material;
       n.material = n.userData._solid; delete n.userData._solid;
@@ -2824,13 +2874,68 @@ function ghostTower(g, on){
   });
 }
 
+/* One place writes the current look onto those clones. DoubleSide while cut,
+   because slicing a solid mass open would otherwise leave it see-through from
+   above — these walls have no interior geometry behind them. */
+function restyle(){
+  if(!ghosted) return;
+  ghosted.traverse(n=>{
+    if(!n.isMesh || !n.userData._solid) return;
+    const mats = Array.isArray(n.material) ? n.material : [n.material];
+    for(const m of mats){
+      m.transparent = xrayOn;
+      m.opacity     = xrayOn ? .17 : 1;
+      m.depthWrite  = !xrayOn;
+      m.side        = sectionOn ? THREE.DoubleSide : THREE.FrontSide;
+      const planes  = sectionOn ? [sectionPlane] : null;
+      // a change in plane count recompiles the shader, so it has to be flagged
+      if(!!m.clippingPlanes !== !!planes) m.needsUpdate = true;
+      m.clippingPlanes = planes;
+    }
+  });
+}
+
+function paintBands(){
+  const bands = ghosted ? (ghosted.userData.bands || []) : [];
+  // the cut says which floor it is, so the marker steps aside once one is chosen
+  bands.forEach((b,i)=>{ if(b) b.material = (i === hotFloor && !sectionOn) ? M.floorHot : M.floorIdle; });
+}
+
+function setXray(on){ if(xrayOn !== on){ xrayOn = on; restyle(); } }
+
+/* The cut sits a hair under the ceiling rather than on it. At the top floor the
+   plane would otherwise land exactly on the slab line where the shaft, the
+   parapet and the crown all meet, and a face coplanar with a clip plane
+   flickers per pixel as the interpolated distance rounds either side of zero. */
+const CUT_EPS = 0.08;
+
+function setSection(n){
+  const on = n > 0;
+  if(on && ghosted) sectionPlane.constant = (ghosted.userData.base || 0) + n * ghosted.userData.fh - CUT_EPS;
+  if(sectionOn !== on){ sectionOn = on; restyle(); }
+  // a plate stands in for the floor you would otherwise look straight through
+  const plates = ghosted ? (ghosted.userData.plates || []) : [];
+  plates.forEach((p,i)=>{ if(p) p.visible = on && i === n; });
+  paintBands();
+}
+
+/* The resting state: whatever floor has been chosen, cut and solid — or the
+   whole tower intact if none has. Everything that stops pointing lands here. */
+function restFloor(){
+  setHotFloor(pickedFloor);
+  setXray(false);
+  setSection(pickedFloor);
+}
+
 function clearFloors(){
   if(ghosted){
-    ghostTower(ghosted, false);
+    setXray(false);
+    setSection(0);
+    claimMaterials(ghosted, false);
     (ghosted.userData.bands || []).forEach(b=>{ if(b) b.material = M.floorIdle; });
     ghosted = null;
   }
-  hotFloor = 0;
+  hotFloor = 0; pickedFloor = 0;
   card.classList.remove('floors','floordetail','docked');
   floorList.innerHTML = '';
 }
@@ -2839,8 +2944,7 @@ function clearFloors(){
 function setHotFloor(n){
   if(n === hotFloor) return;
   hotFloor = n;
-  const bands = ghosted ? (ghosted.userData.bands || []) : [];
-  bands.forEach((b,i)=>{ if(b) b.material = (i === n) ? M.floorHot : M.floorIdle; });
+  paintBands();
   floorList.querySelectorAll('.frow').forEach(r=>{
     r.classList.toggle('hot', +r.dataset.floor === n);
   });
@@ -2856,13 +2960,13 @@ function buildFloorList(p){
     row.innerHTML = '<span class="fl">' + fl.label + '</span>'
                   + '<span class="fsf">' + fl.sf + '</span>'
                   + '<span class="fst ' + cls + '">' + fl.status + '</span>';
-    row.addEventListener('pointerenter', ()=>setHotFloor(fl.n));
+    row.addEventListener('pointerenter', ()=>{ setHotFloor(fl.n); setSection(0); setXray(true); });
     row.addEventListener('click', e=>{ e.stopPropagation(); showFloor(p, fl); });
     floorList.appendChild(row);
   }
 }
 // registered once, not per rebuild — otherwise each reopen stacks another
-floorList.addEventListener('pointerleave', ()=>{ if(!card.classList.contains('floordetail')) setHotFloor(0); });
+floorList.addEventListener('pointerleave', restFloor);
 
 /* Writes a focus into the rig's goal state and lets the existing easing carry
    the move, so every camera change in this flow glides on the same curve as a
@@ -2875,37 +2979,64 @@ function flyTo(f){
   rig.auto = false; rig.idle = 0;
 }
 
-/* The same elevation, pushed in to one storey. Heading, tilt and the leftward
-   offset all carry over from the building shot — only the height and the
-   distance change — so selecting a floor reads as moving closer to what you
-   were already looking at, not as a cut to somewhere else. */
+/* The building shot pushed in to one storey and tilted down. Heading and the
+   leftward offset carry over, so selecting a floor reads as moving closer to
+   what you were already looking at rather than a cut to somewhere else — but
+   once the shaft is sectioned there is a plan to read, and a level elevation
+   cannot read it. */
 function floorFocus(p, fl){
-  const g  = TOWERS[p.towerRef];
-  const fh = g.userData.fh;
+  const g    = TOWERS[p.towerRef];
+  const fh   = g.userData.fh;
+  const plan = g.userData.plan || {w:p.frame.w*0.7, d:p.frame.w*0.7};
   const vfov = camera.fov * Math.PI/180;
   const hfov = 2*Math.atan(Math.tan(vfov/2) * camera.aspect);
   /* Up close the tower is allowed more of the width than the whole-building
-     shot gives it (0.80 rather than 0.55). Holding it to the left share at this
+     shot gives it (0.78 rather than 0.55). Holding it to the left share at this
      distance would have kept the camera 2.5x too far out — the width constraint
      dominates, and the floor was ending up a tenth of the frame with nine
      storeys around it. It still sits left of centre; only its far edge slides
      under the card. */
-  const FLOOR_SHARE = 0.80;
-  const rV = (fh * 5 * 0.5) / Math.tan(vfov*0.5);              // ~5 storeys in frame
-  const rH = (p.frame.w * 0.78 * 0.5) / (Math.tan(hfov*0.5) * FLOOR_SHARE);
-  const radius = clamp(Math.max(rV, rH) * 1.12, 34, 320);
+  const FLOOR_SHARE = 0.78;
+  /* PHI is measured off vertical: 0.86 puts the eye about 40° above the horizon,
+     which is where a floor plate stops being an edge and becomes a plan. */
+  const phi = 0.86;
+  // worst case the tower is turned corner-on, so frame the footprint diagonal
+  const span = Math.hypot(plan.w, plan.d);
+  /* The section leaves a stump: everything from the podium up to the cut is
+     still standing, and that stump is the subject — not the one storey. Frame
+     its height and aim at its middle. CONTEXT caps the band on a tall stack, so
+     a high floor keeps a few storeys of context instead of pulling back to the
+     whole tower. */
+  const CONTEXT = 4.6;
+  const cut    = 6 + fl.n * fh;                          // top of what survives
+  const framed = Math.min(cut, CONTEXT * fh);            // vertical band to fit
+  // seen from that tilt, the plate foreshortens and the walls add their own height
+  const tall = span * Math.cos(phi) + framed * Math.sin(phi);
+  const rV = (tall * 0.5) / Math.tan(vfov*0.5);
+  const rH = (span * 0.5) / (Math.tan(hfov*0.5) * FLOOR_SHARE);
+  const radius = clamp(Math.max(rV, rH) * 1.18, 34, 320);
   const theta  = Math.atan2(p.front[0], p.front[1]) + (p.yaw||0);
-  const target = new THREE.Vector3(p.frame.x, 6 + (fl.n - 1)*fh + fh/2, p.frame.z);
+  /* Aim at the tower itself, not at p.frame. That anchor sits well in front of
+     the building because it was tuned for a near-level elevation, where the
+     difference is invisible. Tilted down 40° it is not: looking down, a point
+     further away sits higher in frame, so aiming short of the subject threw the
+     whole shaft up past the top edge. */
+  const c = new THREE.Vector3(); g.getWorldPosition(c);
+  const target = new THREE.Vector3(c.x, cut - framed*0.5, c.z);
   const off = (1 - FLOOR_SHARE) * radius * Math.tan(hfov*0.5);
   target.x += Math.cos(theta) * off;
   target.z -= Math.sin(theta) * off;
-  return { target, theta, phi: p.phi || 1.53, radius };
+  return { target, theta, phi, radius };
 }
 
 /* Step two of one decision, not a new place: the card swaps its body, the
    camera closes on the chosen storey, and that floor stays lit. */
 function showFloor(p, fl){
+  // committing cuts the tower at this floor's ceiling: no roof, nothing above it
+  pickedFloor = fl.n;
   setHotFloor(fl.n);
+  setXray(false);
+  setSection(fl.n);
   flyTo(floorFocus(p, fl));
   card.classList.remove('floors');
   card.classList.add('floordetail');
@@ -2924,6 +3055,8 @@ cardBack.addEventListener('click', e=>{
 });
 
 function openFloorStack(p){
+  pickedFloor = 0;                  // back to the stack means nothing is chosen
+  restFloor();                      // ...so the tower comes back whole
   card.classList.remove('floordetail');
   card.classList.add('floors');
   document.getElementById('cardTitle').textContent = p.title;
@@ -2951,8 +3084,10 @@ function selectPOI(p, opts){
   // a tower ghosts back and offers its stack instead of a single way in
   card.classList.toggle('docked', !!p.multi);
   if(p.multi){
+    // the tower takes ownership of its materials here so it can be styled alone,
+    // but it stays whole and solid until a floor is pointed at
     ghosted = TOWERS[p.towerRef];
-    if(ghosted) ghostTower(ghosted, true);
+    if(ghosted) claimMaterials(ghosted, true);
     openFloorStack(p);
   }
 
