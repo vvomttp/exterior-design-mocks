@@ -178,7 +178,7 @@
 
   @media (prefers-reduced-motion:reduce){
     #hint .cur,#hint .tip,#hint .tick,#hint .pa,#hint .pb,
-    #hint .kc{animation:none}
+    #hint .kc,#hintMore .arrow{animation:none}
   }
 
   /* swapped on pointer type rather than viewport width: a narrow window with
@@ -190,7 +190,60 @@
     /* no keyboard to teach, and dropping it out of the grid shrinks the row
        back to a single line's height */
     #hint .keyLine{display:none}
+    /* and nothing to point at either — the panel it points to is keyboard
+       shortcuts, which do not exist on a touch device */
+    #hintMore{display:none}
   }
+
+  /* ---------- caption phase three ----------
+     This one points at the auxiliary menu rather than naming a gesture, so it
+     sits on the controls' own baseline, immediately left of the button cluster,
+     with the arrow running right into it. right:114px is the cluster's width
+     plus an 8px gap — 22 inset + 42 AI button + 4 gap + 38 overflow button
+     comes to 106. height:42px matches the cluster, so align-items:center puts
+     the line on exactly the buttons' centre axis rather than near it.
+     pointer-events:none is load-bearing: the scrim reaches across the very
+     buttons this is pointing at. */
+  #hintMore{right:114px;bottom:22px;height:42px;
+    display:flex;align-items:center;gap:6px;
+    font-size:13.5px;font-weight:500;color:#fff;letter-spacing:.02em;
+    white-space:nowrap;text-shadow:0 1px 5px rgba(0,0,0,.5);
+    opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .42s ease,visibility 0s .42s}
+  /* the .3s delay in is the same beat the other two hand off on */
+  #hintMore.show{opacity:1;visibility:visible;
+    transition:opacity .42s ease .3s,visibility 0s 0s}
+  /* the same six-stop ellipse as the centre arc, pinned to the viewport
+     corner: the negative offsets cancel this element's own inset so the origin
+     lands exactly in the corner, and sizing it 100% 100% keeps the ramp
+     finishing on the box edges instead of being clipped mid-fade. */
+  #hintMore::before{content:'';position:absolute;z-index:-1;
+    right:-114px;bottom:-22px;width:min(520px,92vw);height:210px;
+    background:radial-gradient(ellipse 100% 100% at 100% 100%,
+      rgba(0,0,0,.40) 0%,rgba(0,0,0,.30) 26%,rgba(0,0,0,.17) 46%,
+      rgba(0,0,0,.08) 64%,rgba(0,0,0,.03) 82%,rgba(0,0,0,0) 100%)}
+  /* the glyph stands in for the word, so it sits between "More" and
+     "shortcuts" on the tighter 6px gap. It is the shortcuts panel's own header
+     icon, which makes the thing being pointed at recognisable once it opens,
+     and aria-hidden leaves a screen reader reading "More shortcuts" — which is
+     exactly what the line means. */
+  #hintMore .g{width:18px;height:18px;flex:none;display:block;
+    fill:none;stroke:currentColor;stroke-width:1.6;
+    stroke-linecap:round;stroke-linejoin:round;
+    filter:drop-shadow(0 1px 3px rgba(0,0,0,.45))}
+  /* the arrow is simply the last item in the row, so it needs no offset of its
+     own: it ends where the overflow button begins. The extra margin keeps it
+     off the word now that the row gap has tightened. */
+  #hintMore .arrow{width:20px;height:12px;flex:none;display:block;margin-left:3px;
+    fill:none;stroke:currentColor;stroke-width:1.6;
+    stroke-linecap:round;stroke-linejoin:round;
+    filter:drop-shadow(0 1px 3px rgba(0,0,0,.45));
+    animation:gNudge 2.1s ease-in-out infinite}
+  @keyframes gNudge{0%,100%{transform:translateX(-1.5px)}50%{transform:translateX(1.5px)}}
+  /* the row shares the bottom edge with the transport cluster on the left,
+     which is a 102px pill at left:22 — the two meet at around 400px of
+     viewport, so this leaves margin rather than sitting on the boundary */
+  @media (max-width:480px){ #hintMore{display:none} }
 
   /* ---------- POI pins ---------- */
   /* A labelled chip until the pin is chosen; then just the dot, so the card
@@ -680,6 +733,7 @@
   body.loading #aerialTransport,
   body.loading #aerialRight,
   body.loading #poiLayer,
+  body.loading #hintMore,
   body.loading #hint{opacity:0;visibility:hidden;pointer-events:none}
 
   #loader .ldTitle{position:absolute;top:18%;left:50%;transform:translateX(-50%);
@@ -729,6 +783,10 @@
        at bottom:16px, with the arc's origin moved to match */
     #hint{bottom:62px;font-size:12.5px}
     #hint .phase{gap:7px}
+    /* the tool cluster moves to 14/16, so the corner caption and its scrim
+       origin follow it */
+    #hintMore{right:106px;bottom:16px;font-size:12.5px}
+    #hintMore::before{right:-106px;bottom:-16px;height:190px}
     #hint::before{bottom:-62px;height:170px}
     #brandLabel .logo{height:22px}
     #stops{max-width:52vw;overflow-x:auto}
@@ -891,6 +949,22 @@
     <span class="krow"><span class="kc">Q</span><span class="kc">E</span></span>
     <span>for height</span>
   </span>
+</div>
+
+<!-- Caption phase three: where the rest of the controls live. It points at the
+     overflow button instead of naming a gesture, so it sits in that corner
+     rather than the centre. -->
+<div class="ui" id="hintMore">
+  <span>More</span>
+  <svg class="g" viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="2.5" y="6.5" width="19" height="11" rx="2"/>
+    <path d="M6 10.2h.01M9 10.2h.01M12 10.2h.01M15 10.2h.01M18 10.2h.01M7.5 13.8h9"/>
+  </svg>
+  <span>shortcuts</span>
+  <svg class="arrow" viewBox="0 0 20 12" aria-hidden="true">
+    <path d="M1 6h16"/>
+    <path d="M13 2 17.4 6 13 10"/>
+  </svg>
 </div>
 
 <div id="card">
@@ -2621,14 +2695,16 @@ function hoverFloor(cx, cy){
    and the return path set opacity back to 1 with nothing left to take it down
    again, so the caption sat there for the rest of the session.
 
-   Phase one teaches the pointer, phase two the keys. Phase two is earned
-   rather than timed: it waits for evidence that the first lesson landed, so it
-   arrives while attention is still in the scene instead of six seconds after
-   the eyes have moved on. The timer is only a fallback for someone who never
-   drags at all. */
-const hintEl = document.getElementById('hint');
+   Phase one teaches the pointer, phase two the keys, phase three says where
+   the rest of them live. Phase two is earned rather than timed: it waits for
+   evidence that the first lesson landed, so it arrives while attention is
+   still in the scene instead of six seconds after the eyes have moved on. The
+   timer is only a fallback for someone who never drags at all. */
+const hintEl     = document.getElementById('hint');
+const hintMoreEl = document.getElementById('hintMore');
 const HINT_WAIT_MS = 7000;   // fallback advance, for someone who never drags
 const HINT_P2_MS   = 6300;   // phase two dwell, including the 300ms beat
+const HINT_P3_MS   = 6300;   // phase three, the pointer at the overflow menu
 // nothing to teach where there is no keyboard; phase one already swaps itself
 // to the touch glyphs on this same query
 const HINT_KEYS = !matchMedia('(hover:none) and (pointer:coarse)').matches;
@@ -2644,6 +2720,9 @@ function setHint(phase){
   hintEl.classList.toggle('p2', phase === 'p2');
   // .001 rather than 0 so the element keeps its compositor layer
   hintEl.style.opacity = (phase === 'p1' || phase === 'p2') ? 1 : .001;
+  // phase three is a separate element in the other corner, so it carries its
+  // own class rather than riding the centre caption's opacity
+  hintMoreEl.classList.toggle('show', phase === 'p3');
 }
 
 function hintStart(){ hintClear(); setHint('p1'); hintAt(HINT_WAIT_MS, hintAdvance); }
@@ -2653,7 +2732,13 @@ function hintAdvance(){
   hintClear();
   if(!HINT_KEYS){ hintEnd(); return; }
   setHint('p2');
-  hintAt(HINT_P2_MS, hintEnd);
+  hintAt(HINT_P2_MS, hintToMore);
+}
+
+function hintToMore(){
+  hintClear();
+  setHint('p3');
+  hintAt(HINT_P3_MS, hintEnd);
 }
 
 function hintEnd(){ hintClear(); setHint('done'); }
@@ -3173,7 +3258,12 @@ moreMenu.addEventListener('pointerdown', e=>e.stopPropagation());
 /* ---- aerial auxiliary menu ---- */
 const moreBtnAerial  = document.getElementById('moreBtnAerial');
 const moreMenuAerial = document.getElementById('moreMenuAerial');
-function setMoreAerial(open){ moreMenuAerial.classList.toggle('open', open); }
+function setMoreAerial(open){
+  // opening the menu is the message landing, so the arrow pointing at it has
+  // done its job and should not sit there over an open panel
+  if(open && hintPhase === 'p3') hintEnd();
+  moreMenuAerial.classList.toggle('open', open);
+}
 moreBtnAerial.addEventListener('pointerdown', e=>e.stopPropagation());
 moreBtnAerial.addEventListener('click', e=>{
   e.stopPropagation(); setMoreAerial(!moreMenuAerial.classList.contains('open'));
