@@ -71,8 +71,102 @@
     filter:drop-shadow(0 2px 10px rgba(0,0,0,.5)) drop-shadow(0 0 2px rgba(0,0,0,.3))}
 
   /* ---------- hint ---------- */
-  #hint{bottom:20px;left:50%;transform:translateX(-50%);padding:8px 16px;font-size:11.5px;color:var(--muted);
-    font-weight:550;letter-spacing:.01em;transition:opacity .5s;pointer-events:none}
+  /* the hint is a caption, not a control, so it must not look like one: no
+     pill, no border, no shadow box. Legibility over a bright sky comes from
+     a scrim instead — a half ellipse of shadow bleeding up out of the bottom
+     edge, the way a subtitle sits over picture. */
+  #hint{bottom:26px;left:50%;transform:translateX(-50%);font-size:13.5px;color:#fff;
+    font-weight:500;letter-spacing:.02em;white-space:nowrap;
+    text-shadow:0 1px 5px rgba(0,0,0,.5);
+    transition:opacity .5s;pointer-events:none}
+  /* the arc's origin is pinned to the viewport bottom edge — bottom:-26px
+     cancels the hint's own offset — so only the upper half of the ellipse is
+     on screen. Negative z-index puts it behind the glyphs; .ui is already a
+     stacking context, so it can't sink behind the canvas. */
+  #hint::before{content:'';position:absolute;z-index:-1;
+    left:50%;bottom:-26px;transform:translateX(-50%);
+    width:min(980px,96vw);height:200px;
+    /* sized 50% 100% instead of letting it default to farthest-corner: that
+       lands the ellipse's horizontal reach exactly on the box edges, so the
+       ramp finishes inside the element rather than being clipped part-way and
+       leaving a seam down each side. Six stops — three read as a band with a
+       findable boundary. */
+    background:radial-gradient(ellipse 50% 100% at 50% 100%,
+      rgba(0,0,0,.40) 0%,rgba(0,0,0,.30) 26%,rgba(0,0,0,.17) 46%,
+      rgba(0,0,0,.08) 64%,rgba(0,0,0,.03) 82%,rgba(0,0,0,0) 100%)}
+
+  /* gesture glyphs. SVG plus keyframes rather than a GIF: they inherit the
+     caption's colour through currentColor, fade with its opacity, and cost no
+     request — the only version of this that survives the single-file rule.
+     18px against 13.5px text, so they read as punctuation in the line and not
+     as toolbar icons. */
+  #hint{display:grid;align-items:end;justify-items:center}
+  /* both phases share one grid cell, so swapping them cannot reflow the line:
+     a width change here would drag the arc scrim along with it, which is far
+     more noticeable than the words changing. align-items:end keeps phase one
+     sitting exactly where it sat before phase two existed — the taller key
+     cluster grows upward, into the darkest part of the scrim. */
+  #hint .phase{grid-area:1/1;display:flex;align-items:center;justify-content:center;
+    gap:8px;opacity:0;transition:opacity .3s ease}
+  #hint.p1 .mouseLine{opacity:1}
+  /* the delay is the beat between phases. Crossfading two centred lines of
+     different widths reads as a smear; a dark gap reads as a deliberate
+     change of subject. */
+  #hint.p2 .keyLine{opacity:1;transition-delay:.3s}
+  #hint .grp{display:flex;align-items:center;gap:8px}
+  #hint .g{width:18px;height:18px;flex:none;display:block;
+    fill:none;stroke:currentColor;stroke-width:1.6;
+    stroke-linecap:round;stroke-linejoin:round;
+    /* overflow stays visible or the slide clips against the viewBox edge */
+    overflow:visible;filter:drop-shadow(0 1px 3px rgba(0,0,0,.45))}
+  #hint .g .cur,#hint .g .tip,#hint .g .pa,#hint .g .pb{fill:currentColor;stroke:none}
+  #hint .g .guide{opacity:.45}
+  #hint .sep{opacity:.5}
+
+  /* px on an SVG child is user space, so 2.6px is 2.6 of 24 viewBox units —
+     about a fifth of the glyph. Enough to read as motion at 15px without the
+     cursor looking like it has left the frame. */
+  @keyframes gSlide{0%,100%{transform:translateX(-2.6px)}50%{transform:translateX(2.6px)}}
+  @keyframes gWheel{0%,100%{transform:translateY(-1.3px)}50%{transform:translateY(1.3px)}}
+  @keyframes gPinch{0%,100%{transform:translate(-1.6px,-1.6px)}50%{transform:translate(1.6px,1.6px)}}
+  #hint .cur,#hint .tip{animation:gSlide 1.9s ease-in-out infinite}
+  #hint .tick{animation:gWheel 1.5s ease-in-out infinite}
+  #hint .pa{animation:gPinch 1.7s ease-in-out infinite}
+  /* reversed, so the pair converges and parts instead of drifting in step */
+  #hint .pb{animation:gPinch 1.7s ease-in-out infinite reverse}
+  /* keycaps: hairline outline, no fill, no shadow. The button vocabulary in
+     this UI is white glass pills, so an outlined transparent square holding a
+     letter reads as a key legend rather than as something to press. */
+  #hint .cap{display:flex;flex-direction:column;align-items:center;gap:3px}
+  #hint .krow{display:flex;gap:3px}
+  #hint .kc{display:grid;place-items:center;width:17px;height:17px;flex:none;
+    border-radius:4px;border:1px solid rgba(255,255,255,.5);
+    font-size:11px;font-weight:500;line-height:1;text-shadow:none}
+  /* pressed in sequence rather than together: the stagger is what says these
+     are four separate keys and not a chord */
+  @keyframes gKey{0%{background:rgba(255,255,255,0)}
+    6%{background:rgba(255,255,255,.34)}
+    16%,100%{background:rgba(255,255,255,0)}}
+  #hint .kc.k1{animation:gKey 2.8s ease-in-out infinite}
+  #hint .kc.k2{animation:gKey 2.8s ease-in-out infinite .35s}
+  #hint .kc.k3{animation:gKey 2.8s ease-in-out infinite .7s}
+  #hint .kc.k4{animation:gKey 2.8s ease-in-out infinite 1.05s}
+
+  @media (prefers-reduced-motion:reduce){
+    #hint .cur,#hint .tip,#hint .tick,#hint .pa,#hint .pb,
+    #hint .kc{animation:none}
+  }
+
+  /* swapped on pointer type rather than viewport width: a narrow window with
+     a mouse still wants "scroll", a large tablet still wants "pinch" */
+  #hint .grp.touch{display:none}
+  @media (hover:none) and (pointer:coarse){
+    #hint .grp.mouse{display:none}
+    #hint .grp.touch{display:flex}
+    /* no keyboard to teach, and dropping it out of the grid shrinks the row
+       back to a single line's height */
+    #hint .keyLine{display:none}
+  }
 
   /* settings: top-right, mirroring the brand lockup opposite it. Persists
      across both modes — it isn't scene chrome, so it doesn't hide on the way
@@ -435,7 +529,12 @@
 
   @media (max-width:640px){
     .poi .lbl{font-size:11px}
-    #hint{display:none}
+    /* the hint carries the pinch glyph now, so it earns its place on touch
+       rather than being hidden — lifted clear of the 38px tool pills sitting
+       at bottom:16px, with the arc's origin moved to match */
+    #hint{bottom:62px;font-size:12.5px}
+    #hint .phase{gap:7px}
+    #hint::before{bottom:-62px;height:170px}
     #brandLabel .logo{height:22px}
     #stops{max-width:52vw;overflow-x:auto}
   }
@@ -532,7 +631,50 @@
 
 <div id="poiLayer"></div>
 
-<div class="ui pill" id="hint">Drag to orbit · scroll to zoom</div>
+<!-- Two phases in one caption: the pointer lesson, then the keyboard one.
+     Which one is showing belongs entirely to setHint() — see caption phases. -->
+<div class="ui" id="hint">
+  <span class="phase mouseLine">
+    <span class="grp mouse">
+      <svg class="g" viewBox="0 0 24 24" aria-hidden="true">
+        <path class="guide" d="M4.2 8.6 1.6 12l2.6 3.4"/>
+        <path class="guide" d="M19.8 8.6 22.4 12l-2.6 3.4"/>
+        <path class="cur" d="M9 4.5l9.5 8.6-4.9.5 2.4 4.8-2.1 1-2.4-4.8-2.5 2.6z"/>
+      </svg>
+      <span>Drag to orbit</span>
+      <span class="sep">·</span>
+      <svg class="g" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="7" y="3.4" width="10" height="17.2" rx="5"/>
+        <path class="tick" d="M12 7v3.3"/>
+      </svg>
+      <span>Scroll to zoom</span>
+    </span>
+    <span class="grp touch">
+      <svg class="g" viewBox="0 0 24 24" aria-hidden="true">
+        <path class="guide" d="M4.2 8.6 1.6 12l2.6 3.4"/>
+        <path class="guide" d="M19.8 8.6 22.4 12l-2.6 3.4"/>
+        <circle class="tip" cx="12" cy="12" r="3.3"/>
+      </svg>
+      <span>Drag to orbit</span>
+      <span class="sep">·</span>
+      <svg class="g" viewBox="0 0 24 24" aria-hidden="true">
+        <circle class="pa" cx="9.2" cy="9.2" r="2.9"/>
+        <circle class="pb" cx="14.8" cy="14.8" r="2.9"/>
+      </svg>
+      <span>Pinch to zoom</span>
+    </span>
+  </span>
+  <span class="phase keyLine">
+    <span class="cap">
+      <span class="krow"><span class="kc k1">W</span></span>
+      <span class="krow"><span class="kc k2">A</span><span class="kc k3">S</span><span class="kc k4">D</span></span>
+    </span>
+    <span>to pan</span>
+    <span class="sep">·</span>
+    <span class="krow"><span class="kc">Q</span><span class="kc">E</span></span>
+    <span>for height</span>
+  </span>
+</div>
 
 <div id="aerialRight">
   <button class="rtbtn dark" id="moreBtnAerial" aria-label="More options">
@@ -624,11 +766,11 @@
           <span class="krow"><span class="key">W</span></span>
           <span class="krow"><span class="key">A</span><span class="key">S</span><span class="key">D</span></span>
         </span>
-        <span class="sc-label">Fly Around Space</span>
+        <span class="sc-label">Pan Across Site</span>
       </div>
       <div class="sc-row">
         <span class="keys"><span class="krow"><span class="key">Q</span><span class="key">E</span></span></span>
-        <span class="sc-label">Move Up &amp; Down</span>
+        <span class="sc-label">Raise &amp; Lower View</span>
       </div>
       <div class="sc-row">
         <span class="keys"><span class="krow"><span class="key wide">Esc</span></span></span>
@@ -1565,6 +1707,50 @@ function applyAerial(){
   camera.lookAt(target);
 }
 
+/* ---- caption phases -----------------------------------------------------
+   One owner for the hint's visibility. It used to be written from three
+   places — enterInterior, the return from a tour, and a 9s setTimeout — and
+   they disagreed: leave for a tour after the fade timer had already fired,
+   and the return path set opacity back to 1 with nothing left to take it down
+   again, so the caption sat there for the rest of the session.
+
+   Phase one teaches the pointer, phase two the keys. Phase two is earned
+   rather than timed: it waits for evidence that the first lesson landed, so it
+   arrives while attention is still in the scene instead of six seconds after
+   the eyes have moved on. The timer is only a fallback for someone who never
+   drags at all. */
+const hintEl = document.getElementById('hint');
+const HINT_WAIT_MS = 7000;   // fallback advance, for someone who never drags
+const HINT_P2_MS   = 6300;   // phase two dwell, including the 300ms beat
+// nothing to teach where there is no keyboard; phase one already swaps itself
+// to the touch glyphs on this same query
+const HINT_KEYS = !matchMedia('(hover:none) and (pointer:coarse)').matches;
+
+let hintPhase = 'idle';
+const hintTimers = [];
+function hintClear(){ hintTimers.forEach(clearTimeout); hintTimers.length = 0; }
+function hintAt(ms, fn){ hintTimers.push(setTimeout(fn, ms)); }
+
+function setHint(phase){
+  hintPhase = phase;
+  hintEl.classList.toggle('p1', phase === 'p1');
+  hintEl.classList.toggle('p2', phase === 'p2');
+  // .001 rather than 0 so the element keeps its compositor layer
+  hintEl.style.opacity = (phase === 'p1' || phase === 'p2') ? 1 : .001;
+}
+
+function hintStart(){ hintClear(); setHint('p1'); hintAt(HINT_WAIT_MS, hintAdvance); }
+
+function hintAdvance(){
+  if(hintPhase !== 'p1') return;            // already advanced, or finished
+  hintClear();
+  if(!HINT_KEYS){ hintEnd(); return; }
+  setHint('p2');
+  hintAt(HINT_P2_MS, hintEnd);
+}
+
+function hintEnd(){ hintClear(); setHint('done'); }
+
 /* --------------------------------------------------------- input handling */
 const dom = renderer.domElement;
 let dragging=false, lastX=0, lastY=0, moved=0;
@@ -1595,7 +1781,12 @@ dom.addEventListener('pointermove', e=>{
     if(rig.view==='dollhouse') rig.gPhi = clamp(rig.gPhi - dy*0.0034, 0.16, 1.24);
   }
 });
-addEventListener('pointerup', ()=>{ dragging=false; });
+addEventListener('pointerup', ()=>{
+  // a real orbit rather than a click: the pointer lesson has landed, so hand
+  // the caption over to the keyboard one while attention is still in the scene
+  if(dragging && moved > 20 && rig.mode === 'aerial') hintAdvance();
+  dragging=false;
+});
 dom.addEventListener('wheel', e=>{
   e.preventDefault();
   zoomBy(Math.sign(e.deltaY));
@@ -1794,7 +1985,7 @@ syncPlay();
 async function enterInterior(poi){
   const cfg = INTERIORS[poi.interior] || INTERIORS.lobby;
   rig.mode = 'transition';
-  document.getElementById('hint').style.opacity = 0;
+  hintEnd();                    // taking a tour ends the lesson for good
   aerialBar.classList.add('hide');
   aerialRight.classList.add('hide');
   // the pin's own update only runs in the aerial branch, so it can't hide itself
@@ -1865,7 +2056,9 @@ async function exitInterior(){
   applyAerial();
   rig.mode = 'aerial';
   rig.auto = false; rig.idle = 0;
-  document.getElementById('hint').style.opacity = 1;
+  /* the caption deliberately does not come back. It used to be re-shown here
+     with the fade timer already spent, which pinned it at full opacity for
+     the rest of the session — and by now the controls have been used. */
   aerialBar.classList.remove('hide');
   aerialRight.classList.remove('hide');  brandLabel.classList.remove('hide');
   await fade(0, 620);
@@ -2376,7 +2569,7 @@ setTimeout(()=>{
   document.getElementById('loader').classList.add('gone');
   document.body.classList.remove('loading');      // reveals the aerial chrome
   startReveal();                                  // capture streams in over the basemap
-  setTimeout(()=>document.getElementById('hint').style.opacity=.001, 9000);
+  hintStart();                                    // phase one of the caption
 }, LOADER_MIN_MS);
 
 })();
