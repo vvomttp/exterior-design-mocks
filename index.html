@@ -51,12 +51,11 @@
      columns stretched into mostly empty space */
   main{width:100%;max-width:840px;position:relative}
 
+  /* 34px rather than the 14px it carried under the subhead: the title now sits
+     directly above the flow board and has to hold that gap on its own */
   h1{
     font-size:clamp(30px,6vw,44px);line-height:1.1;letter-spacing:-.03em;
-    font-weight:700;margin:0 0 14px;
-  }
-  .sub{
-    font-size:15px;line-height:1.6;color:var(--muted);margin:0 0 38px;max-width:46ch;
+    font-weight:700;margin:0 0 34px;
   }
 
   ul{list-style:none;margin:0;padding:0;
@@ -90,6 +89,12 @@
   .b .badge{
     background:linear-gradient(150deg,rgba(160,120,255,.30),rgba(160,120,255,.10));
     border-color:rgba(160,120,255,.35);color:#ded0ff;
+  }
+  /* the loading study is neither strategy, so it takes its own tint rather than
+     borrowing A's blue or B's purple and implying it belongs to one of them */
+  .c .badge{
+    background:linear-gradient(150deg,rgba(255,168,80,.28),rgba(255,168,80,.10));
+    border-color:rgba(255,168,80,.35);color:#ffdcb5;
   }
   /* glyphs inherit the badge's own colour, so each variant tints itself */
   .badge svg{width:21px;height:21px;display:block;
@@ -141,7 +146,6 @@
 <body>
 <main>
   <h1>Exterior to Interior UX Prototypes</h1>
-  <p class="sub">Two approaches to moving a viewer from an aerial view into a walkable interior tour</p>
 
   <a class="flow" href="https://www.figma.com/board/NNso5cirCw6akBW8y13HGX/Splats-Flows?node-id=0-1&amp;t=Pjbpc3GjUAO65Js3-1"
      target="_blank" rel="noopener noreferrer">
@@ -254,6 +258,35 @@
           <span class="eyebrow">Aside</span>
           <span class="name">Rendering study</span>
           <span class="desc">Same interaction as A, with sky-based reflections and procedural material maps — open beside A to compare</span>
+        </span>
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+      </a>
+    </li>
+  </ul>
+
+  <div class="group">
+    <!-- a three-quarter arc: the spinner idiom, and deliberately without a
+         centre dot, which would read as the orbit glyph instead -->
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3.4a8.6 8.6 0 1 1-6.08 2.52"/>
+    </svg>
+    First impression · loading
+  </div>
+  <ul>
+    <li class="wide">
+      <a class="card c" href="homes/a-loading/index.html">
+        <span class="badge">
+          <!-- the same arc with a head on its leading end, which is what
+               separates a spinner from a ring -->
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3.4a8.6 8.6 0 1 1-6.08 2.52"/>
+            <circle class="solid" cx="5.92" cy="5.92" r="1.9"/>
+          </svg>
+        </span>
+        <span class="txt">
+          <span class="eyebrow">Study</span>
+          <span class="name">Loading screen</span>
+          <span class="desc">A full copy of the multi-home community prototype, kept whole on purpose — the loader's job is to hand off to a real scene, so there has to be a scene to hand off to. Only the load sequence is under examination here.</span>
         </span>
         <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
       </a>

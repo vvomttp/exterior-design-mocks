@@ -29,12 +29,20 @@ commercial/b/           single-entry: one building, one pin
 homes/a/                multi-entry:  residential community, floors per home
 homes/b/                single-entry: one listing, one pin
 homes/a-hifi/           fidelity study — homes/a with better materials and geometry
+homes/a-loading/        loading study — homes/a, kept whole, iterating on the loader
 PROTOTYPE-RATIONALE.md  STALE. Predates several rounds of changes. Verify before trusting.
 ```
 
-`homes/a-hifi/` is a copy of `homes/a/` that diverged. Changes to shared systems
-usually need to land in **both**, and the two files drift — always grep both
-rather than assuming.
+`homes/a-hifi/` and `homes/a-loading/` are both copies of `homes/a/` that
+diverge from it. A change to a shared system usually has to land in **all
+three**, and they drift — always grep every one rather than assuming.
+
+`homes/a-loading/` is deliberately a full copy rather than a stripped-down
+harness. `startReveal()` collects its targets at call time and reveals the
+capture outward from the centre the moment the loader hides, so the loader's
+whole job is the handoff to a scene; with no scene there is nothing to hand off
+to and nothing worth judging. Leave the rest of the prototype working and change
+only the load sequence in that folder.
 
 ### The A / B distinction
 
