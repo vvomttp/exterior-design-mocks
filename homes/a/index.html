@@ -81,6 +81,17 @@
   .iconbtn.on .gly{stroke:#333}
   .iconbtn.on .glyf{fill:#333}
 
+  /* Orbit glyph: a nucleus and one shell, the ring broken around its satellite
+     so the dot sits in the ring rather than on it. Butt caps rather than the
+     round ones .gly sets — a round cap grows the dash by half the stroke at
+     each end and would close the gap the dot has to sit in. The perimeter is
+     2*pi*8.4 = 52.78, and the offset slides the [dash][gap] pattern round until
+     the gap centres on the dot at 46.92 along the path, which is 320 degrees
+     clockwise from 3 o'clock. The .on inversion is the whole state readout;
+     the glyph itself holds still. */
+  #orbitBtn .orbRing{stroke-linecap:butt;
+    stroke-dasharray:45.58 7.2;stroke-dashoffset:2.26}
+
   /* same dark surface as the interior toolbar, sized up as the primary action */
   /* Aerial controls use the showcase idiom: the same 38px surface, drawn in SVG
      with a stroked hairline rather than a CSS border, and the same hover. */
@@ -779,15 +790,29 @@
     #card.docked{right:12px;left:12px;top:auto;bottom:12px;transform:none}
     #card.docked.show{transform:none}
     /* the hint carries the pinch glyph now, so it earns its place on touch
-       rather than being hidden — lifted clear of the 38px tool pills sitting
-       at bottom:16px, with the arc's origin moved to match */
-    #hint{bottom:62px;font-size:12.5px}
+       rather than being hidden. The bottom edge is crowded at this size — the
+       tool row sits at 16 and stands 42 tall — so both captions lift well
+       clear of it rather than perching a few pixels off the buttons, and each
+       scrim origin follows its caption. */
+    #hint{bottom:84px;font-size:12.5px}
     #hint .phase{gap:7px}
-    /* the tool cluster moves to 14/16, so the corner caption and its scrim
-       origin follow it */
-    #hintMore{right:106px;bottom:16px;font-size:12.5px}
-    #hintMore::before{right:-106px;bottom:-16px;height:190px}
-    #hint::before{bottom:-62px;height:170px}
+    #hint::before{bottom:-84px;height:190px}
+    /* phase three cannot stay inline with the controls here: the transport
+       pill on the left leaves it no room on a narrow screen, so it moves above
+       them. right:69px puts the trailing arrow's centre on the overflow
+       button's centre — 79px in from the edge, being the 14 inset plus the 42
+       AI button plus the 4 gap plus half of the 38 button — and the arrow
+       turns to point down at it instead of sideways past it. */
+    #hintMore{right:69px;bottom:66px;font-size:12.5px}
+    #hintMore::before{right:-69px;bottom:-66px;height:190px}
+    /* the rotation has to live inside the keyframes: an animated transform
+       beats a static one, so a plain rotate on .arrow would be ignored while
+       the nudge is running. Translating along the rotated x-axis also turns
+       the nudge downward for free. */
+    #hintMore .arrow{animation-name:gNudgeDown}
+    @keyframes gNudgeDown{
+      0%,100%{transform:rotate(90deg) translateX(-1.5px)}
+      50%{transform:rotate(90deg) translateX(1.5px)}}
     #brandLabel .logo{height:22px}
     #stops{max-width:52vw;overflow-x:auto}
   }
@@ -887,8 +912,12 @@
     <svg viewBox="0 0 38 38" fill="none" aria-hidden="true">
       <path class="btn-bg" d="M0 19C0 8.50659 8.50659 0 19 0C29.4934 0 38 8.50659 38 19C38 29.4934 29.4934 38 19 38C8.50659 38 0 29.4934 0 19Z"/>
       <path class="btn-ring" d="M19 0.5C29.2173 0.5 37.5 8.78273 37.5 19C37.5 29.2173 29.2173 37.5 19 37.5C8.78273 37.5 0.5 29.2173 0.5 19C0.5 8.78273 8.78273 0.5 19 0.5Z"/>
-      <ellipse class="gly" cx="19" cy="19" rx="9.6" ry="4.6" transform="rotate(-24 19 19)"/>
-      <circle class="glyf" cx="19" cy="19" r="2.7"/>
+      <!-- a nucleus and one shell. The ring breaks around its satellite so the
+           dot reads as riding it rather than pasted on top; the gap is placed
+           by dash arithmetic, worked out in the CSS. -->
+      <circle class="glyf" cx="19" cy="19" r="2.6"/>
+      <circle class="gly orbRing" cx="19" cy="19" r="8.4"/>
+      <circle class="glyf" cx="25.44" cy="13.6" r="2"/>
     </svg>
   </button>
   <button class="iconbtn" id="resetBtn" title="Reset view" aria-label="Reset view">
