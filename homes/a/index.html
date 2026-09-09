@@ -405,19 +405,68 @@
   .frow .fl{font-size:13px;font-weight:650;color:var(--ink);letter-spacing:-.01em;flex:none;width:56px}
   .frow .fsf{font-size:12px;color:var(--muted);font-weight:550;line-height:1.45;flex:1}
 
-  /* Inside a floor, the counter gives up its corner. Stepping between points is
-     the wrong move when you are one level into one of them; going back to the
-     stack is the right one, so it takes the same chip in the same place. */
-  #cardBack{position:absolute;top:10px;left:10px;height:28px;padding:0 10px 0 6px;
-    border-radius:999px;display:none;align-items:center;gap:3px;
-    background:rgba(0,0,0,.28);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
-    font-size:11px;font-weight:650;letter-spacing:.01em;color:#fff;
-    transition:background .14s ease}
-  #cardBack:hover{background:rgba(0,0,0,.46)}
-  #cardBack svg{width:13px;height:13px;flex:none;stroke:#fff;stroke-width:2.2;fill:none;
-    stroke-linecap:round;stroke-linejoin:round}
+  /* ---- floor rail ----
+     Once a floor is committed the card shows that floor alone, and changing
+     level meant going back to the stack and picking again: two clicks and a
+     camera pull-back to move one storey. The rail keeps the stack to hand —
+     one pip per floor, top pip the top floor, so the column reads as a small
+     elevation of the house rather than as generic pagination.
+
+     A sibling of the card rather than a child, because #card clips its overflow
+     for the art box and would cut anything hanging outside its left edge. It
+     therefore mirrors the card's docked position instead of following it, which
+     is safe for exactly one reason: floors only exist on multi points, multi
+     points are always docked, so the rail never has to chase the pin-anchored
+     placement. */
+  #floorRail{position:fixed;z-index:39;
+    top:50%;left:calc(75% - 165px);transform:translate(-100%,-50%);margin-left:-12px;
+    display:none;flex-direction:column;align-items:flex-end;gap:3px;
+    /* the column is mostly empty air over a live scene, so only the pips
+       themselves take the pointer */
+    pointer-events:none}
+  #floorRail.show{display:flex}
+  .frdot{display:flex;align-items:center;justify-content:flex-end;gap:8px;
+    height:26px;padding:0;border:none;background:none;cursor:pointer;
+    pointer-events:auto}
+  .frdot:focus-visible{outline:2px solid var(--pin);outline-offset:2px;border-radius:999px}
+  /* the label is a control, so unlike the aerial caption it is allowed to be a
+     pill — that is the vocabulary every other button here uses */
+  .frLbl{font-size:11.5px;font-weight:650;letter-spacing:-.01em;color:var(--ink);
+    white-space:nowrap;overflow:hidden;max-width:0;opacity:0;line-height:24px;
+    border-radius:999px;background:rgba(255,255,255,.94);box-shadow:var(--shadow-sm);
+    transition:max-width .22s cubic-bezier(.22,1,.36,1),opacity .16s ease,padding .22s ease}
+  .frdot:hover .frLbl,
+  .frdot:focus-visible .frLbl{max-width:130px;opacity:1;padding:0 10px}
+  /* white with a dark ring rather than a flat dot: the rail floats over an
+     aerial that runs from bright sky to dark planting, and neither a white pip
+     nor a dark one survives both on its own */
+  .frPip{width:9px;height:9px;flex:none;border-radius:50%;
+    background:rgba(255,255,255,.9);box-shadow:0 0 0 1.5px rgba(11,18,32,.45);
+    transition:background .16s ease,box-shadow .16s ease,transform .16s ease}
+  .frdot:hover .frPip{transform:scale(1.18)}
+  .frdot[aria-current="true"] .frPip{background:var(--pin);
+    box-shadow:0 0 0 1.5px rgba(11,18,32,.3),0 0 0 4px rgba(255,255,255,.55)}
+
+  /* Inside a floor, the counter keeps its corner. It used to give the chip up
+     to the way back, on the reasoning that stepping between points is the wrong
+     move when you are one level inside one of them — but the pager is also how
+     you know where you are in the set, and losing it mid-flow costs more than
+     the corner is worth.
+
+     So the way back moves into the footer, under the CTA rather than beside it.
+     Down here it reads as the quieter of two ways out of this floor, which is
+     what it is now that the rail handles moving between floors: this one is for
+     backing out to the whole house and its room-by-room list. Stacking says
+     "secondary" without needing a second border weight to say it. */
+  #cardBack{display:none;margin-top:9px;width:100%;height:30px;
+    border:none;background:none;border-radius:999px;
+    align-items:center;justify-content:center;gap:5px;
+    font-size:12px;font-weight:650;letter-spacing:-.01em;color:var(--muted);
+    transition:background .14s ease,color .14s ease}
+  #cardBack:hover{background:rgba(15,23,38,.05);color:var(--ink)}
+  #cardBack svg{width:15px;height:15px;flex:none;stroke:currentColor;stroke-width:2.1;
+    fill:none;stroke-linecap:round;stroke-linejoin:round}
   #card.floordetail #cardBack{display:flex}
-  #card.floordetail #cardCount{display:none}
 
   /* ---- text-only card ----
      A secondary point has no tour, so there is no interior still to show and
@@ -458,6 +507,39 @@
   #settingsBtn{position:fixed;z-index:30;top:18px;right:18px;
     transition:opacity .35s,visibility 0s 0s}
   #settingsBtn.hide{opacity:0;visibility:hidden;transition:opacity .3s,visibility 0s .3s}
+
+  /* ---------- compass tape ----------
+     A strip rather than a rose. At this scale nobody is navigating by absolute
+     heading; they are keeping track of which way the site has turned, and a
+     tape that scrubs shows the turning itself rather than only its result. It
+     also reads left to right the way the drag does.
+
+     The tape carries three full revolutions and the transform always sits in
+     the middle one, so the wrap at 360° lands on an identical mark and cannot
+     be seen. */
+  #compass{position:fixed;z-index:30;top:20px;left:50%;transform:translateX(-50%);
+    width:min(360px,52vw);height:34px;overflow:hidden;pointer-events:none;
+    /* the tape has no ends, so it must not look like it has any: fade out at
+       both edges rather than cutting */
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent);
+    mask-image:linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent);
+    transition:opacity .4s ease,visibility 0s 0s}
+  #compass.hide{opacity:0;visibility:hidden;
+    transition:opacity .35s ease,visibility 0s .35s}
+  /* the index stays put and the tape moves under it, which is the whole idea */
+  #compass::after{content:'';position:absolute;left:50%;top:0;
+    width:2px;height:6px;margin-left:-1px;border-radius:1px;
+    background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.55)}
+  #compassTape{position:absolute;top:0;left:50%;height:100%;will-change:transform}
+  /* Marks are placed by absolute offset rather than laid out in a row. The
+     spacing is degrees, and letting a flex row round each gap would walk the
+     letters off their own ticks over the course of a revolution. */
+  #compassTape i{position:absolute;top:25px;width:1px;height:5px;
+    background:rgba(255,255,255,.5);transform:translateX(-50%)}
+  #compassTape i.card{top:24px;height:7px;background:rgba(255,255,255,.85)}
+  #compassTape b{position:absolute;top:7px;font-size:11.5px;font-weight:700;
+    letter-spacing:.08em;color:#fff;transform:translateX(-50%);
+    text-shadow:0 1px 6px rgba(0,0,0,.6)}
 
   /* ---------- interior HUD ---------- */
   /* visibility (not just opacity) so hidden interior controls can't be clicked from the aerial view */
@@ -745,6 +827,7 @@
   body.loading #aerialRight,
   body.loading #poiLayer,
   body.loading #hintMore,
+  body.loading #compass,
   body.loading #hint{opacity:0;visibility:hidden;pointer-events:none}
 
   #loader .ldTitle{position:absolute;top:18%;left:50%;transform:translateX(-50%);
@@ -781,6 +864,9 @@
   @media (max-width:900px){
     #card.docked{left:auto;right:20px;transform:translateY(-50%) scale(.97)}
     #card.docked.show{transform:translateY(-50%)}
+    /* the card pins to the right edge here, so the rail follows it: 20 inset
+       plus the card's 330 width plus the 12 gap */
+    #floorRail{left:auto;right:362px;transform:translateY(-50%);margin-left:0}
   }
 
   @media (max-width:640px){
@@ -789,6 +875,12 @@
        bottom sheet as every other one */
     #card.docked{right:12px;left:12px;top:auto;bottom:12px;transform:none}
     #card.docked.show{transform:none}
+    /* The card is a full-width sheet at this size, so there is no "outside its
+       left edge" to hang a rail on. Rather than cramming it somewhere it does
+       not belong, it stands down: the sheet is wide enough that the floor list
+       and the back chip are perfectly usable, and two comfortable taps beat one
+       cramped one. */
+    #floorRail.show{display:none}
     /* the hint carries the pinch glyph now, so it earns its place on touch
        rather than being hidden. The bottom edge is crowded at this size — the
        tool row sits at 16 and stands 42 tall — so both captions lift well
@@ -864,6 +956,10 @@
 <div id="vignette"></div>
 <div id="poiLayer"></div>
 <svg id="leaderLayer" aria-hidden="true"><line id="leaderLine" x1="0" y1="0" x2="0" y2="0"/></svg>
+
+<!-- Compass tape. Marks are generated in buildCompass(); the heading maths is
+     one minus sign, explained there. -->
+<div id="compass" aria-hidden="true"><div id="compassTape"></div></div>
 
 <div class="ui" id="brandLabel">
   <svg class="logo" viewBox="0 0 1415 298" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Matterport">
@@ -1009,7 +1105,6 @@
     <button class="cnav" id="cardNext" aria-label="Next point of interest"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button>
   </div>
   <button id="cardClose"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
-  <button id="cardBack"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>All floors</span></button>
   <div id="cardBody">
     <div id="cardTitle">—</div>
     <div id="cardSub">—</div>
@@ -1019,8 +1114,17 @@
       <span>Inside</span>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
     </button>
+    <!-- Same button as before, moved out of the art's top-left corner and into
+         the footer so the counter can keep that chip. Its id and handler are
+         unchanged. -->
+    <button id="cardBack"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>All floors</span></button>
   </div>
 </div>
+
+<!-- Floor rail: the stack kept to hand once a floor is committed. Built by
+     buildFloorRail() in the same order as the card's list, which is the whole
+     point of it — see the note there. -->
+<div id="floorRail" role="group" aria-label="Change floor"></div>
 
 <div id="aerialRight">
   <button class="rtbtn dark" id="moreBtnAerial" aria-label="More options">
@@ -2328,6 +2432,57 @@ function applyAerial(){
   camera.lookAt(target);
 }
 
+/* ---- compass tape -------------------------------------------------------
+   Kept next to applyAerial because it depends entirely on the convention set
+   just above. The camera sits at target + radius*(sinθ, ·, cosθ) and looks
+   back at the target, so the view direction across the ground plane is
+   (-sinθ, -cosθ). Taking -Z as north and +X as east — nothing in the scene
+   contradicts that, and the site was modelled to it — the bearing is
+   atan2(east, north) = atan2(-sinθ, cosθ), which reduces to -θ.
+
+   The whole mapping is that one minus sign. Worth spelling out, because it is
+   exactly the kind of thing someone later "corrects" into a bug: at θ=0 the
+   camera stands on +Z looking toward -Z, which is north, and at θ=90° it
+   stands on +X looking toward -X, which is west. */
+const compass     = document.getElementById('compass');
+const compassTape = document.getElementById('compassTape');
+const CMP_PPD    = 3.2;      // px per degree — sets how much arc the strip shows
+const CMP_LABELS = ['N','NE','E','SE','S','SW','W','NW'];
+
+(function buildCompass(){
+  const frag = document.createDocumentFragment();
+  /* Three revolutions. The transform always sits in the middle one, so when
+     the bearing wraps past 360 the jump lands on a mark identical to the one
+     it left and nothing appears to move. */
+  for(let d = 0; d <= 1080; d += 15){
+    const x = (d * CMP_PPD).toFixed(1) + 'px';
+    const tick = document.createElement('i');
+    tick.style.left = x;
+    if(d % 45 === 0){
+      tick.className = 'card';
+      const lbl = document.createElement('b');
+      lbl.style.left = x;
+      lbl.textContent = CMP_LABELS[(d / 45) % 8];
+      frag.appendChild(lbl);
+    }
+    frag.appendChild(tick);
+  }
+  compassTape.appendChild(frag);
+})();
+
+let cmpLast = -1;
+function updateCompass(){
+  let bearing = (-rig.theta * 180 / Math.PI) % 360;
+  if(bearing < 0) bearing += 360;
+  // a tenth of a degree is a third of a pixel at this scale, so below that
+  // there is nothing to see and the write is skipped
+  if(Math.abs(bearing - cmpLast) < 0.1) return;
+  cmpLast = bearing;
+  // +360 keeps us in the middle revolution
+  compassTape.style.transform =
+    'translateX(' + (-(bearing + 360) * CMP_PPD).toFixed(1) + 'px)';
+}
+
 /* The building half of the floor selection. Declared up here because the
    pointer handlers below reach for it; it is a no-op until a two-story plan is
    the active point, so every other frame it costs one boolean. */
@@ -2659,10 +2814,13 @@ async function enterInterior(poi){
   rig.mode = 'transition';
   hintEnd();                    // taking a tour ends the lesson for good
   card.classList.remove('show');
+  hideFloorRail();              // it hangs off the card, so it leaves with it
   poiLayer.style.opacity = 0;
   aerialTransport.classList.add('hide');
   aerialRight.classList.add('hide');  setMoreAerial(false);
   brandLabel.classList.add('hide');
+  // the tour has its own heading; site north means nothing once you are inside
+  compass.classList.add('hide');
 
   // save aerial state to return to
   savedAerial = {target:rig.gTarget.clone(), theta:rig.gTheta, phi:rig.gPhi, radius:rig.gRadius};
@@ -2732,6 +2890,7 @@ async function exitInterior(){
   poiLayer.style.opacity = 1;
   aerialTransport.classList.remove('hide');
   aerialRight.classList.remove('hide');  brandLabel.classList.remove('hide');
+  compass.classList.remove('hide');
   await fade(0, 620);
 }
 document.getElementById('exitBtn').addEventListener('click', e=>{ e.stopPropagation(); exitInterior(); });
@@ -3166,6 +3325,11 @@ function clearFloors(){
   hotFloor = 0; pickedFloor = 0;
   card.classList.remove('floors','floordetail','docked');
   floorList.innerHTML = '';
+  // dropped rather than just hidden: the next point owns different floors, and
+  // the poi stamp is what tells syncFloorRail to rebuild
+  floorRail.classList.remove('show');
+  floorRail.innerHTML = '';
+  delete floorRail.dataset.poi;
 }
 
 /* one place decides what "floor n is hot" looks like, in both views */
@@ -3193,6 +3357,56 @@ function buildFloorList(p){
 }
 // registered once, not per rebuild — otherwise each reopen stacks another
 floorList.addEventListener('pointerleave', restFloor);
+
+/* ---- floor rail ---------------------------------------------------------
+   The same floors as the card's list, in the same order, because that order
+   carries meaning: p.floors runs high to low, so the top pip is the top floor
+   and the column reads as a small elevation of the house. Reverse it and
+   moving down the rail would move up the building. */
+const floorRail = document.getElementById('floorRail');
+
+function buildFloorRail(p){
+  floorRail.innerHTML = '';
+  for(const fl of p.floors){
+    const b = document.createElement('button');
+    b.className = 'frdot';
+    b.dataset.floor = fl.n;
+    b.innerHTML = '<span class="frLbl"></span><span class="frPip"></span>';
+    b.querySelector('.frLbl').textContent = fl.label;   // textContent: labels are data
+    /* Deliberately no x-ray preview on hover, unlike the rows inside the card.
+       Those preview by un-cutting the house and ghosting it, which is honest
+       from the whole-house shot — but here the house is already cut at the
+       committed floor, so previewing would tear that section down and rebuild
+       it for a pointer merely passing through. Too much churn to spend on a
+       maybe. The pips commit on click and stay quiet until then. */
+    b.addEventListener('click', e=>{ e.stopPropagation(); showFloor(p, fl); });
+    // the scene takes the wheel on pointerdown anywhere, so stop it here or
+    // reaching for a pip would also count as grabbing the aerial
+    b.addEventListener('pointerdown', e=>e.stopPropagation());
+    floorRail.appendChild(b);
+  }
+}
+
+function markFloorRail(n){
+  floorRail.querySelectorAll('.frdot').forEach(b=>{
+    if(+b.dataset.floor === n) b.setAttribute('aria-current', 'true');
+    else b.removeAttribute('aria-current');
+  });
+}
+
+/* Rebuilt only when the point changes, not on every floor change: replacing
+   the buttons under a keyboard user mid-selection would drop their focus to
+   the body, which is exactly the person this control helps most. */
+function syncFloorRail(p, n){
+  if(floorRail.dataset.poi !== p.title){
+    buildFloorRail(p);
+    floorRail.dataset.poi = p.title;
+  }
+  markFloorRail(n);
+  floorRail.classList.add('show');
+}
+
+function hideFloorRail(){ floorRail.classList.remove('show'); }
 
 /* Writes a focus into the rig's goal state and lets the existing easing carry
    the move, so every camera change here glides like a pin selection. */
@@ -3265,6 +3479,7 @@ function showFloor(p, fl){
   document.getElementById('cardSub').textContent   = fl.rooms;
   document.getElementById('cardDesc').textContent  = fl.desc;
   document.getElementById('launch').style.display  = '';
+  syncFloorRail(p, fl.n);           // and the rail comes out beside the card
 }
 cardBack.addEventListener('click', e=>{
   e.stopPropagation();
@@ -3283,6 +3498,9 @@ function openFloorStack(p){
   document.getElementById('launch').style.display  = 'none';
   buildFloorList(p);
   setHotFloor(0);
+  // the full list is back in the card, so the shorthand stands down rather
+  // than offering the same choice twice
+  hideFloorRail();
 }
 
 function selectPOI(p, opts){
@@ -3684,6 +3902,7 @@ function frame(){
     rig.target.lerp(rig.gTarget, k);
     applyAerial();
     updatePins();
+    updateCompass();
     if(activePOI && !activePOI.multi){
       if(activePOI._screen){ placeCardByPin(activePOI); drawLeader(activePOI); }
       else leaderLayer.classList.remove('on');   // pin behind a building

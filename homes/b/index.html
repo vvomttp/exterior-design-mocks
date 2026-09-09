@@ -239,6 +239,39 @@
     transition:opacity .35s,visibility 0s 0s}
   #settingsBtn.hide{opacity:0;visibility:hidden;transition:opacity .3s,visibility 0s .3s}
 
+  /* ---------- compass tape ----------
+     A strip rather than a rose. At this scale nobody is navigating by absolute
+     heading; they are keeping track of which way the site has turned, and a
+     tape that scrubs shows the turning itself rather than only its result. It
+     also reads left to right the way the drag does.
+
+     The tape carries three full revolutions and the transform always sits in
+     the middle one, so the wrap at 360° lands on an identical mark and cannot
+     be seen. */
+  #compass{position:fixed;z-index:30;top:20px;left:50%;transform:translateX(-50%);
+    width:min(360px,52vw);height:34px;overflow:hidden;pointer-events:none;
+    /* the tape has no ends, so it must not look like it has any: fade out at
+       both edges rather than cutting */
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent);
+    mask-image:linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent);
+    transition:opacity .4s ease,visibility 0s 0s}
+  #compass.hide{opacity:0;visibility:hidden;
+    transition:opacity .35s ease,visibility 0s .35s}
+  /* the index stays put and the tape moves under it, which is the whole idea */
+  #compass::after{content:'';position:absolute;left:50%;top:0;
+    width:2px;height:6px;margin-left:-1px;border-radius:1px;
+    background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.55)}
+  #compassTape{position:absolute;top:0;left:50%;height:100%;will-change:transform}
+  /* Marks are placed by absolute offset rather than laid out in a row. The
+     spacing is degrees, and letting a flex row round each gap would walk the
+     letters off their own ticks over the course of a revolution. */
+  #compassTape i{position:absolute;top:25px;width:1px;height:5px;
+    background:rgba(255,255,255,.5);transform:translateX(-50%)}
+  #compassTape i.card{top:24px;height:7px;background:rgba(255,255,255,.85)}
+  #compassTape b{position:absolute;top:7px;font-size:11.5px;font-weight:700;
+    letter-spacing:.08em;color:#fff;transform:translateX(-50%);
+    text-shadow:0 1px 6px rgba(0,0,0,.6)}
+
   /* ---------- the entry pin ----------
      Strategy B has one way in, but the way in still has a place. This marks it
      on the model rather than leaving the toolbar button to imply it. Same marker
@@ -561,6 +594,7 @@
   body.loading #aerialBar,
   body.loading #aerialRight,
   body.loading #hintMore,
+  body.loading #compass,
   body.loading #hint{opacity:0;visibility:hidden;pointer-events:none}
 
   #loader .ldTitle{position:absolute;top:18%;left:50%;transform:translateX(-50%);
@@ -667,6 +701,10 @@
   </div>
 </div>
 <div id="vignette"></div>
+
+<!-- Compass tape. Marks are generated in buildCompass(); the heading maths is
+     one minus sign, explained there. -->
+<div id="compass" aria-hidden="true"><div id="compassTape"></div></div>
 
 <div class="ui" id="brandLabel">
   <svg class="logo" viewBox="0 0 1415 298" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Matterport">
@@ -1810,6 +1848,57 @@ function applyAerial(){
   camera.lookAt(target);
 }
 
+/* ---- compass tape -------------------------------------------------------
+   Kept next to applyAerial because it depends entirely on the convention set
+   just above. The camera sits at target + radius*(sinθ, ·, cosθ) and looks
+   back at the target, so the view direction across the ground plane is
+   (-sinθ, -cosθ). Taking -Z as north and +X as east — nothing in the scene
+   contradicts that, and the site was modelled to it — the bearing is
+   atan2(east, north) = atan2(-sinθ, cosθ), which reduces to -θ.
+
+   The whole mapping is that one minus sign. Worth spelling out, because it is
+   exactly the kind of thing someone later "corrects" into a bug: at θ=0 the
+   camera stands on +Z looking toward -Z, which is north, and at θ=90° it
+   stands on +X looking toward -X, which is west. */
+const compass     = document.getElementById('compass');
+const compassTape = document.getElementById('compassTape');
+const CMP_PPD    = 3.2;      // px per degree — sets how much arc the strip shows
+const CMP_LABELS = ['N','NE','E','SE','S','SW','W','NW'];
+
+(function buildCompass(){
+  const frag = document.createDocumentFragment();
+  /* Three revolutions. The transform always sits in the middle one, so when
+     the bearing wraps past 360 the jump lands on a mark identical to the one
+     it left and nothing appears to move. */
+  for(let d = 0; d <= 1080; d += 15){
+    const x = (d * CMP_PPD).toFixed(1) + 'px';
+    const tick = document.createElement('i');
+    tick.style.left = x;
+    if(d % 45 === 0){
+      tick.className = 'card';
+      const lbl = document.createElement('b');
+      lbl.style.left = x;
+      lbl.textContent = CMP_LABELS[(d / 45) % 8];
+      frag.appendChild(lbl);
+    }
+    frag.appendChild(tick);
+  }
+  compassTape.appendChild(frag);
+})();
+
+let cmpLast = -1;
+function updateCompass(){
+  let bearing = (-rig.theta * 180 / Math.PI) % 360;
+  if(bearing < 0) bearing += 360;
+  // a tenth of a degree is a third of a pixel at this scale, so below that
+  // there is nothing to see and the write is skipped
+  if(Math.abs(bearing - cmpLast) < 0.1) return;
+  cmpLast = bearing;
+  // +360 keeps us in the middle revolution
+  compassTape.style.transform =
+    'translateX(' + (-(bearing + 360) * CMP_PPD).toFixed(1) + 'px)';
+}
+
 /* ---- caption phases -----------------------------------------------------
    One owner for the hint's visibility. It used to be written from three
    places — enterInterior, the return from a tour, and a 9s setTimeout — and
@@ -2107,6 +2196,8 @@ async function enterInterior(poi){
   entryPin.classList.add('hidden');
   setMoreAerial(false);
   brandLabel.classList.add('hide');
+  // the tour has its own heading; site north means nothing once you are inside
+  compass.classList.add('hide');
 
   // save aerial state to return to
   savedAerial = {target:rig.gTarget.clone(), theta:rig.gTheta, phi:rig.gPhi, radius:rig.gRadius};
@@ -2175,6 +2266,7 @@ async function exitInterior(){
      the rest of the session — and by now the controls have been used. */
   aerialBar.classList.remove('hide');
   aerialRight.classList.remove('hide');  brandLabel.classList.remove('hide');
+  compass.classList.remove('hide');
   await fade(0, 620);
 }
 document.getElementById('exitBtn').addEventListener('click', e=>{ e.stopPropagation(); exitInterior(); });
@@ -2641,6 +2733,7 @@ function frame(){
     rig.target.lerp(rig.gTarget, k);
     applyAerial();
     updateEntryPin();      // after the camera moves, or it projects a frame late
+    updateCompass();
   }
   else if(rig.mode === 'interior' && rig.view !== 'walk'){
     // dollhouse / floor plan: same spherical orbit as the aerial view, room-sized
