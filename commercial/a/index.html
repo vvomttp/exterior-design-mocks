@@ -1027,7 +1027,7 @@
     <div id="floorList"></div>
     <div id="cardDesc">—</div>
     <button id="launch">
-      <span>Launch 3D tour</span>
+      <span>Inside</span>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
     </button>
   </div>
@@ -3381,8 +3381,14 @@ function openFloorStack(p){
 function selectPOI(p, opts){
   activePOI = p;
   clearFloors();
+  const launchBtn = document.getElementById('launch');
   // a secondary point has no showcase behind it, so it offers no way in
-  document.getElementById('launch').style.display = p.secondary ? 'none' : '';
+  launchBtn.style.display = p.secondary ? 'none' : '';
+  /* "Inside" is unambiguous sitting under the card's own title, but a screen
+     reader arriving at the button on its own would hear only the preposition,
+     so the space name rides along. Visible text stays first in the label, which
+     is what voice control matches on. */
+  launchBtn.setAttribute('aria-label', 'Inside ' + p.title);
   card.classList.toggle('textonly', !!p.secondary);
   leaderLayer.classList.toggle('secondary', !!p.secondary);
   POIS.forEach(q=>q.el.classList.toggle('active', q===p));
@@ -3469,7 +3475,7 @@ function stepPOI(dir){
 });
 
 /* ======================================================= INTERIOR STILLS
-   Each info card shows a real render of the space its Launch button opens.
+   Each info card shows a real render of the space its Inside button opens.
    Shot once at startup on a small offscreen renderer, one per idle beat so
    the aerial view never stutters, then the offscreen context is released. */
 const previews = Object.create(null);
