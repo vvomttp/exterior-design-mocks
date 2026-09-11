@@ -447,25 +447,34 @@
   .frdot[aria-current="true"] .frPip{background:var(--pin);
     box-shadow:0 0 0 1.5px rgba(11,18,32,.3),0 0 0 4px rgba(255,255,255,.55)}
 
-  /* Inside a floor, the counter keeps its corner. It used to give the chip up
-     to the way back, on the reasoning that stepping between points is the wrong
-     move when you are one level inside one of them — but the pager is also how
-     you know where you are in the set, and losing it mid-flow costs more than
-     the corner is worth.
+  /* Inside a floor, the counter keeps its corner — the pager is also how you
+     know where you are in the set, and losing it mid-flow costs more than the
+     corner is worth. So the two ways out of a floor share one row in the
+     footer instead: left backs out to the stack, right goes forward into the
+     tour.
 
-     So the way back moves into the footer, under the CTA rather than beside it.
-     Down here it reads as the quieter of two ways out of this floor, which is
-     what it is now that the rail handles moving between floors: this one is for
-     backing out to the whole house and its room-by-room list. Stacking says
-     "secondary" without needing a second border weight to say it. */
-  #cardBack{display:none;margin-top:9px;width:100%;height:30px;
-    border:none;background:none;border-radius:999px;
-    align-items:center;justify-content:center;gap:5px;
-    font-size:12px;font-weight:650;letter-spacing:-.01em;color:var(--muted);
-    transition:background .14s ease,color .14s ease}
-  #cardBack:hover{background:rgba(15,23,38,.05);color:var(--ink)}
-  #cardBack svg{width:15px;height:15px;flex:none;stroke:currentColor;stroke-width:2.1;
-    fill:none;stroke-linecap:round;stroke-linejoin:round}
+     That left/right split is what carries the direction now, which is why the
+     back button needs no chevron of its own. Only #launch keeps one, so the
+     button with a forward arrow is the forward action, and the row never shows
+     two arrows pointing away from each other.
+
+     Both flex from a zero basis at 1 : 1.6, which does three jobs with one
+     pair of numbers. Together, the primary takes about 62% and reads as
+     dominant. Alone — a single-entry point, where there is no stack to go back
+     to — the CTA fills the row exactly as it did before this was a row at all.
+     And on a leased floor in the commercial build, where the CTA is the thing
+     that hides, the way out fills it instead of sitting stranded at 38%.
+
+     Margins sit on the buttons rather than on the row, so a card with neither
+     of them — a secondary point, or the floor stack itself — collapses to
+     nothing rather than leaving the row's margin behind. */
+  #cardActions{display:flex;align-items:stretch;gap:8px}
+  #cardBack{display:none;flex:1;margin-top:16px;height:38px;padding:0 10px;
+    border:1px solid var(--line);background:none;border-radius:999px;
+    align-items:center;justify-content:center;
+    font-size:12.5px;font-weight:650;letter-spacing:-.01em;color:var(--ink);
+    transition:background .14s ease,border-color .14s ease}
+  #cardBack:hover{background:rgba(15,23,38,.05);border-color:rgba(11,18,32,.22)}
   #card.floordetail #cardBack{display:flex}
 
   /* ---- text-only card ----
@@ -490,7 +499,7 @@
      70% translucent, because this one sits on solid white paper instead of the
      3D scene, where the translucency would wash out to mid grey. */
   #launch{
-    margin-top:16px;width:100%;height:38px;border-radius:999px;
+    margin-top:16px;flex:1.6;min-width:0;height:38px;border-radius:999px;
     background:rgba(51,51,51,.94);border:1px solid rgba(112,112,112,.5);color:#fff;
     display:flex;align-items:center;justify-content:center;gap:7px;
     font-size:12.5px;font-weight:650;letter-spacing:-.01em;
@@ -1110,14 +1119,16 @@
     <div id="cardSub">—</div>
     <div id="floorList"></div>
     <div id="cardDesc">—</div>
-    <button id="launch">
-      <span>Inside</span>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
-    </button>
-    <!-- Same button as before, moved out of the art's top-left corner and into
-         the footer so the counter can keep that chip. Its id and handler are
-         unchanged. -->
-    <button id="cardBack"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>All floors</span></button>
+    <!-- Back sits first so it lands left of the CTA: leftward reads as
+         backward, which is what lets it drop its own chevron. Same id and
+         handler as when it was a chip on the artwork. -->
+    <div id="cardActions">
+      <button id="cardBack"><span>All floors</span></button>
+      <button id="launch">
+        <span>Inside</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -1166,10 +1177,9 @@
   </button>
 </div>
 
-<!-- aerial auxiliary menu: the Showcase overflow at its real length. Only Full
-     screen and Shortcuts are wired in this prototype; the rest are present so
-     the menu reads at the right size and the two that work sit where they will
-     sit in the product. -->
+<!-- aerial auxiliary menu: the tour's overflow, carrying the items that still
+     mean something from above. The interior-only entries (ceiling,
+     measurements, Outside) have no aerial equivalent and are left out. -->
 <div id="moreMenuAerial">
   <button class="amx"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16.5v-5M12 8h.01"/></svg> Space info</button>
   <button class="amx"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.3-4.3"/></svg> Search</button>
@@ -1397,7 +1407,7 @@ const IDLE_RESUME_MS = 5000;    // dollhouse only — the aerial orbit has a but
 
 /* ---------------------------------------------------------------- renderer */
 const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance',
-  logarithmicDepthBuffer:true});   // near-coplanar ground layers need the precision
+  logarithmicDepthBuffer:true});   // six near-coplanar ground layers need the precision
 // per-material clipping, so a section cut applies to one building and not the site
 renderer.localClippingEnabled = true;
 renderer.setSize(innerWidth, innerHeight);
@@ -1412,8 +1422,9 @@ document.body.appendChild(renderer.domElement);
 const AERIAL_FOV   = 46;                  // tight lens flatters the campus massing
 const INTERIOR_FOV = 60;                  // wide lens takes in a whole room
 const camera = new THREE.PerspectiveCamera(AERIAL_FOV, innerWidth/innerHeight, 4, 2400);
-/* One 0.5-3000 range served neither view well. Aerial never needs to see
-   anything within 4 units; walking a room never needs 3000. */
+/* Depth range is the other half of the z-fighting fix. Aerial wants a far
+   near-plane; walking a room wants a close one. Swapping them per mode gives
+   both a far tighter ratio than one compromise range ever could. */
 const CLIP = { aerial:[4, 2400], interior:[0.3, 400] };
 function setClip(mode){
   const [n,f] = CLIP[mode] || CLIP.aerial;
@@ -1461,6 +1472,10 @@ const M = {
   floorPlate: new THREE.MeshStandardMaterial({color:0xd9d5cd, metalness:0, roughness:.92}),
   // interior partitions, read only once the shell is cut or made translucent
   partition:  new THREE.MeshStandardMaterial({color:0xeceae5, metalness:0, roughness:.95}),
+  trim:       new THREE.MeshStandardMaterial({color:0xf7f6f2, metalness:0,   roughness:.6}),
+  frame:      new THREE.MeshStandardMaterial({color:0xe9e7e1, metalness:0,   roughness:.5}),
+  gutter:     new THREE.MeshStandardMaterial({color:0xdedbd4, metalness:.25, roughness:.5}),
+  brick:      new THREE.MeshStandardMaterial({color:0x9c6b58, metalness:0,   roughness:.9}),
   woodLight:  new THREE.MeshStandardMaterial({color:0xd9b98c, metalness:0,   roughness:.7}),
   woodDark:   new THREE.MeshStandardMaterial({color:0x8b6a45, metalness:0,   roughness:.75}),
   carpet:     new THREE.MeshStandardMaterial({color:0x40495a, metalness:0,   roughness:1}),
@@ -1497,9 +1512,34 @@ function makeSky(c){
   return new THREE.Mesh(g,m);
 }
 /* No sky sphere: the capture reads as an object floating in black, the way
-   a real one does in a viewer. makeSky is kept because the fidelity build
-   still samples it for image-based lighting. */
+   a real one does in a viewer. makeSky is kept anyway — nothing renders it,
+   but the image-based lighting below samples it for the environment map, so
+   deleting it would flatten every reflective surface in the scene. */
 exterior.background = new THREE.Color(0x000000);
+
+/* ---------------------------------------------------- image-based lighting
+   The materials were already lit, but nothing was reflected: `glass` at
+   metalness .85 is physically a mirror, and it was mirroring a void, so it
+   rendered as flat grey. Bake the procedural sky into a PMREM cubemap once at
+   startup and hand it to both scenes as `environment`; every rough surface
+   picks up sky bounce and every smooth one finally has something to show.
+   Built from a throwaway scene holding a second sky sphere, because the one
+   above is parented to `exterior` and PMREMGenerator wants a scene of its own. */
+const envMap = (()=>{
+  try{
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    // The visible sky is black, but a black cubemap lights nothing — sample a
+    // neutral daylight gradient instead, so glass and metal still have
+    // something to reflect against the dark backdrop.
+    const skyScene = new THREE.Scene();
+    skyScene.add(makeSky([0x3f7fc4, 0xa9cbe8, 0xe8eef2]));
+    const rt = pmrem.fromScene(skyScene, 0, 1, 3000);
+    pmrem.dispose();
+    return rt.texture;
+  } catch(err){ return null; }   // no float render targets — fall back to the old flat look
+})();
+if(envMap){ exterior.environment = envMap; interior.environment = envMap; }
+
 
 /* ------------------------------------------------------------------ lights */
 function lightRig(scene, sunPos, intensity, ambient, shadowSpan){
@@ -1544,47 +1584,291 @@ function slab(w,d,mat,x,y,z,rotY,parent){
   (parent||site).add(m); return m;
 }
 
-/* ground */
-
 /* ---------------------------------------------------------- ground stack
-   The site is several near-coplanar layers. Packed into a tenth of a unit and
-   viewed from 200+ away they fight for the depth buffer, which is the flicker
-   on the roads. Named heights spaced ~10x further apart, plus an explicit
-   polygonOffset per decal material so the order is decided rather than left to
-   precision. Still under a unit total, so nothing reads as raised from above. */
+   One named height per layer, spaced far enough apart to survive the depth
+   buffer, and each decal material also carries a polygonOffset so the order is
+   decided explicitly rather than left to precision. Nothing here is thick
+   enough to see from above — it is all under a unit — but it is 10x the
+   separation the layers used to have. */
 const Y = {
-  lawn:   0.16,    // the capture footprint
+  terrain: 0,      // the 900-unit base
+  lawn:   0.16,    // mown community lawn over it
   lot:    0.34,    // per-parcel lawn
   road:   0.52,    // asphalt
   stripe: 0.60,    // markings on the asphalt
-  walk:   0.68,    // pavers, driveways, aprons
+  walk:   0.68,    // pavers, driveways, aprons — on top where they cross a road
 };
-// M.water is left out on purpose: it is 3D geometry (fountain bowls,
-// pool volumes), and a slope-scaled offset on curved surfaces makes them
-// punch through whatever contains them
-[[M.grass,-1],[M.asphalt,-2],[M.stripe,-4],[M.paver,-3]]
+[[M.grass,-1],[M.grassDark,0],[M.asphalt,-2],[M.stripe,-4],[M.paver,-3],[M.water,-2]]
   .forEach(([m,f])=>{ if(!m) return; m.polygonOffset = true;
     m.polygonOffsetFactor = f; m.polygonOffsetUnits = f; m.needsUpdate = true; });
 
+
 /* ---- roads: a spine with a loop and a cul-de-sac at the north end ------- */
-slab(30, 300, M.asphalt, 0, Y.road, 40);              // spine, running north
-slab(210, 26, M.asphalt, 0, Y.road, 150);             // frontage at the south
+slab(30, 300, M.asphalt, 0, Y.road, 40);            // spine, running north
+slab(210, 26, M.asphalt, 0, Y.road, 150);           // frontage at the south
 const cul = new THREE.Mesh(new THREE.CircleGeometry(46, 40), M.asphalt);
 cul.rotation.x = -Math.PI/2; cul.position.set(0, Y.road, -104); cul.receiveShadow = true; site.add(cul);
-slab(150, 24, M.asphalt, -104, Y.road, 20);           // west branch
-slab(150, 24, M.asphalt,  104, Y.road, 20);           // east branch
+slab(150, 24, M.asphalt, -104, Y.road, 20);         // west branch
+slab(150, 24, M.asphalt,  104, Y.road, 20);         // east branch
 // centre lines
 for(let z=-70;z<170;z+=20) slab(1.1, 9, M.stripe, 0, Y.stripe, z);
 for(let x=-170;x<170;x+=20) slab(9, 1.1, M.stripe, x, Y.stripe, 150);
 
-/* ---- one house, parameterised ------------------------------------------
-   Rotation faces the front door toward the street; `story` gives a taller
-   two-storey mass, and the palette varies so the community doesn't read as
-   twelve copies of the same object. */
+/* ---- curbs -------------------------------------------------------------
+   Real height where the asphalt meets the lawn. This is what stops the roads
+   reading as paint on grass, and it gives the sun an edge to cast off. */
+const CURB_H = 0.5, CURB_W = 0.9;
+function curbRun(len, x, z, alongZ){
+  const w = alongZ ? CURB_W : len, dd = alongZ ? len : CURB_W;
+  const m = box(w, CURB_H, dd, M.concrete, x, Y.road + CURB_H/2 - .06, z);
+  m.castShadow = false;   // a 0.5-unit lip does not need to be in the shadow map
+  return m;
+}
+// spine, both sides, broken where the branches and the cul-de-sac meet it
+for(const sx of [-15.45, 15.45]){
+  curbRun(118, sx, 131, true);    // north of the frontage down to the west/east branches
+  curbRun(96,  sx, 4,   true);
+}
+// frontage road
+for(const sz of [150 - 13.45, 150 + 13.45]) curbRun(210, 0, sz, false);
+// branches
+for(const bx of [-104, 104]){
+  for(const sz of [20 - 12.45, 20 + 12.45]) curbRun(150, bx, sz, false);
+}
+// cul-de-sac: a flat torus is exactly the right primitive for a circular curb
+const culCurb = new THREE.Mesh(new THREE.TorusGeometry(46.4, CURB_H/2, 5, 56), M.concrete);
+culCurb.rotation.x = Math.PI/2; culCurb.position.set(0, Y.road + CURB_H/2 - .06, -104);
+culCurb.receiveShadow = true; site.add(culCurb);
+
 const SIDING = [0xe8e2d6, 0xd8dbd6, 0xcfd6dc, 0xe4d8c8, 0xd2cec6, 0xdfe3e6];
 const ROOFS  = [0x5c5a57, 0x6b5f52, 0x4f5b62, 0x726257, 0x585f5c];
 const sidingMats = SIDING.map(c=> new THREE.MeshStandardMaterial({color:c, roughness:.85}));
 const roofMats   = ROOFS.map(c=> new THREE.MeshStandardMaterial({color:c, roughness:.7, flatShading:true}));
+
+/* ==================================================== PROCEDURAL TEXTURES
+   Every surface here used to be a single flat colour, which is what made the
+   site read as a diagram rather than a place. These maps are drawn on canvas
+   at runtime — no asset files, no fetch, so the page still opens by
+   double-click — and the normal maps are derived from the same canvases with a
+   Sobel pass, so relief always agrees with the pattern that produced it.
+
+   Albedo gets sRGBEncoding; normal and roughness maps are raw data and must
+   not, or the lighting goes soft and wrong. */
+
+const MAXA = renderer.capabilities.getMaxAnisotropy();
+
+function canvasOf(w, h, draw){
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  return c;
+}
+
+function texOf(canvas, rx, ry, srgb){
+  const t = new THREE.CanvasTexture(canvas);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(rx, ry);
+  t.anisotropy = MAXA;
+  if(srgb) t.encoding = THREE.sRGBEncoding;
+  return t;
+}
+
+/* Sobel over luminance → tangent-space normals. Cheap, and it means a texture
+   and its relief can never drift apart. */
+function normalOf(canvas, strength, rx, ry){
+  const w = canvas.width, h = canvas.height;
+  const src = canvas.getContext('2d').getImageData(0,0,w,h).data;
+  const lum = new Float32Array(w*h);
+  for(let i=0;i<w*h;i++) lum[i] = (src[i*4]*0.299 + src[i*4+1]*0.587 + src[i*4+2]*0.114)/255;
+  const out = canvasOf(w, h, (ctx)=>{
+    const img = ctx.createImageData(w,h);
+    const at = (x,y)=> lum[((y+h)%h)*w + ((x+w)%w)];
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+      const dx = (at(x+1,y-1) + 2*at(x+1,y) + at(x+1,y+1))
+               - (at(x-1,y-1) + 2*at(x-1,y) + at(x-1,y+1));
+      const dy = (at(x-1,y+1) + 2*at(x,y+1) + at(x+1,y+1))
+               - (at(x-1,y-1) + 2*at(x,y-1) + at(x+1,y-1));
+      let nx = -dx*strength, ny = -dy*strength, nz = 1;
+      const l = Math.hypot(nx,ny,nz); nx/=l; ny/=l; nz/=l;
+      const i = (y*w+x)*4;
+      img.data[i]   = (nx*0.5+0.5)*255;
+      img.data[i+1] = (ny*0.5+0.5)*255;
+      img.data[i+2] = (nz*0.5+0.5)*255;
+      img.data[i+3] = 255;
+    }
+    ctx.putImageData(img,0,0);
+  });
+  return texOf(out, rx, ry, false);
+}
+
+// value noise, tiling by construction so nothing seams at the repeat
+function grain(ctx, w, h, n, min, max, alpha){
+  for(let i=0;i<n;i++){
+    const r = min + Math.random()*(max-min);
+    ctx.globalAlpha = alpha * (0.35 + Math.random()*0.65);
+    ctx.fillStyle = Math.random() < .5 ? '#000' : '#fff';
+    const x = Math.random()*w, y = Math.random()*h;
+    for(const [ox,oy] of [[0,0],[w,0],[-w,0],[0,h],[0,-h]]){
+      ctx.beginPath(); ctx.arc(x+ox, y+oy, r, 0, 6.2832); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ---- horizontal lap siding: boards with a shadow line under each course --- */
+function sidingCanvas(hex){
+  return canvasOf(256, 256, (ctx,w,h)=>{
+    ctx.fillStyle = hex; ctx.fillRect(0,0,w,h);
+    const course = 16;
+    for(let y=0;y<h;y+=course){
+      ctx.fillStyle = 'rgba(0,0,0,.16)';           // reveal at the board lap
+      ctx.fillRect(0, y+course-2, w, 2);
+      ctx.fillStyle = 'rgba(255,255,255,.05)';     // light catch just below it
+      ctx.fillRect(0, y+course, w, 1);
+      ctx.fillStyle = 'rgba(0,0,0,' + (0.012 + Math.random()*0.02).toFixed(3) + ')';
+      ctx.fillRect(0, y, w, course-2);             // per-board tone variance
+    }
+    grain(ctx, w, h, 260, .4, 1.6, .05);
+  });
+}
+
+/* ---- asphalt shingles: staggered courses, tabs, weathered per-tab tone ---- */
+function shingleCanvas(hex){
+  return canvasOf(256, 256, (ctx,w,h)=>{
+    ctx.fillStyle = hex; ctx.fillRect(0,0,w,h);
+    const ch = 22, tw = 34;
+    for(let row=0, y=0; y<h+ch; row++, y+=ch){
+      const off = (row % 2) ? tw/2 : 0;
+      for(let x=-tw; x<w+tw; x+=tw){
+        ctx.fillStyle = 'rgba(0,0,0,' + (0.05 + Math.random()*0.11).toFixed(3) + ')';
+        ctx.fillRect(x+off, y, tw-2, ch-3);
+        ctx.fillStyle = 'rgba(0,0,0,.30)';         // keyway between tabs
+        ctx.fillRect(x+off+tw-2, y, 2, ch-3);
+      }
+      ctx.fillStyle = 'rgba(0,0,0,.34)';           // butt-edge shadow
+      ctx.fillRect(0, y+ch-3, w, 3);
+    }
+    grain(ctx, w, h, 900, .3, 1.1, .12);           // mineral granules
+  });
+}
+
+function flatCanvas(hex, n, min, max, alpha, extra){
+  return canvasOf(256, 256, (ctx,w,h)=>{
+    ctx.fillStyle = hex; ctx.fillRect(0,0,w,h);
+    if(extra) extra(ctx,w,h);
+    grain(ctx, w, h, n, min, max, alpha);
+  });
+}
+
+const hex = n => '#' + n.toString(16).padStart(6,'0');
+
+// siding + roofs, one map per palette entry
+SIDING.forEach((c,i)=>{
+  const cv = sidingCanvas(hex(c));
+  sidingMats[i].map         = texOf(cv, 4, 3, true);
+  sidingMats[i].normalMap   = normalOf(cv, 2.2, 4, 3);
+  sidingMats[i].normalScale = new THREE.Vector2(.7,.7);
+  sidingMats[i].envMapIntensity = .85;
+  sidingMats[i].needsUpdate = true;
+});
+ROOFS.forEach((c,i)=>{
+  const cv = shingleCanvas(hex(c));
+  roofMats[i].map          = texOf(cv, 3, 3, true);
+  roofMats[i].normalMap    = normalOf(cv, 3.0, 3, 3);
+  roofMats[i].normalScale  = new THREE.Vector2(1,1);
+  roofMats[i].flatShading  = false;   // the shingle relief now does this job better
+  roofMats[i].envMapIntensity = .7;
+  roofMats[i].needsUpdate  = true;
+});
+
+/* ---- ground planes carry the most screen area, so they matter most ------- */
+function dress(mat, canvas, rx, ry, nStrength, envI){
+  mat.map = texOf(canvas, rx, ry, true);
+  mat.normalMap = normalOf(canvas, nStrength, rx, ry);
+  mat.normalScale = new THREE.Vector2(.6,.6);
+  if(envI != null) mat.envMapIntensity = envI;
+  mat.needsUpdate = true;
+}
+
+dress(M.grass,     flatCanvas('#7fa25c', 1400, .5, 2.4, .16), 90, 90, 1.4, .8);
+dress(M.grassDark, flatCanvas('#6b8d4c', 1400, .5, 2.4, .16), 140, 140, 1.4, .8);
+dress(M.asphalt,   flatCanvas('#50555c', 1800, .3, 1.3, .18), 26, 26, 1.1, .55);
+dress(M.concrete,  flatCanvas('#c3c6c9', 900, .4, 1.8, .07), 22, 22, .9, .8);
+dress(M.stone,     flatCanvas('#dcd8d0', 700, .5, 2.0, .06), 6, 6, .9, .8);
+dress(M.stoneDark, flatCanvas('#b8b3aa', 700, .5, 2.0, .06), 6, 6, .9, .8);
+
+// pavers keep their joints, so they get a grid rather than pure noise
+dress(M.paver, flatCanvas('#d7cfc2', 300, .4, 1.4, .05, (ctx,w,h)=>{
+  ctx.strokeStyle = 'rgba(0,0,0,.20)'; ctx.lineWidth = 2;
+  for(let i=0;i<=w;i+=32){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,h); ctx.stroke(); }
+  for(let j=0;j<=h;j+=32){ ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(w,j); ctx.stroke(); }
+}), 14, 14, 1.6, .8);
+
+/* Glass and metal were the worst offenders without a cubemap — push their
+   contribution up now that there is one to sample. */
+[M.glass, M.glassDark].forEach(m=>{ m.envMapIntensity = 1.5; m.needsUpdate = true; });
+M.metal.envMapIntensity = 1.25;
+M.water.envMapIntensity = 1.6;
+M.spandrel.envMapIntensity = .9;
+
+/* The sky is now doing part of the ambient job, so pull the hemisphere light
+   back to keep the overall exposure where it was. */
+exterior.traverse(o=>{ if(o.isHemisphereLight) o.intensity *= 0.72; });
+
+/* ---- one house, parameterised ------------------------------------------
+   Built as assemblies rather than primitives: the mass carries corner boards,
+   the openings are recessed behind proud frames and sills so the sun draws a
+   reveal line, and the roof has a real edge with fascia and gutter. Only the
+   large masses go into the shadow map — trim at this scale would cost more than
+   it shows. */
+/* ---- hip roof -----------------------------------------------------------
+   Two trapezoids and two triangles meeting at a ridge, sized to the wall plan
+   plus an overhang. Winding is decided per triangle against an outward
+   reference vector, so the normals can't come out inverted. UVs are a planar
+   projection from above: shingle courses stay continuous across the hips, and
+   1 unit of plan maps to a consistent share of the texture on every face. */
+function hipRoof(w, d, oh, h, mat){
+  const W = w + oh*2, D = d + oh*2;
+  const pos = [], uv = [];
+  const V = (x,y,z)=> new THREE.Vector3(x,y,z);
+  const UVS = 14;   // plan units per texture tile
+
+  function tri(a, b, c, out){
+    const n = new THREE.Vector3().subVectors(b,a).cross(new THREE.Vector3().subVectors(c,a));
+    if(n.dot(out) < 0){ const t = b; b = c; c = t; }
+    for(const p of [a,b,c]){ pos.push(p.x, p.y, p.z); uv.push(p.x/UVS, p.z/UVS); }
+  }
+  // on a square plan the ridge collapses to a point and the roof is a true
+  // pyramid, so the second triangle of each long face would be degenerate
+  function quad(a, b, c, dd, out){
+    tri(a,b,c,out);
+    if(c.distanceToSquared(dd) > 1e-6) tri(a,c,dd,out);
+  }
+
+  if(W >= D){                        // ridge runs along x
+    const r = (W - D)/2;
+    const ridgeA = V(-r, h, 0), ridgeB = V(r, h, 0);
+    quad(V(-W/2,0, D/2), V(W/2,0, D/2), ridgeB, ridgeA, V(0,.55, 1));
+    quad(V( W/2,0,-D/2), V(-W/2,0,-D/2), ridgeA, ridgeB, V(0,.55,-1));
+    tri(V( W/2,0, D/2), V( W/2,0,-D/2), ridgeB, V( 1,.55,0));
+    tri(V(-W/2,0,-D/2), V(-W/2,0, D/2), ridgeA, V(-1,.55,0));
+  } else {                           // ridge runs along z
+    const r = (D - W)/2;
+    const ridgeA = V(0, h, -r), ridgeB = V(0, h, r);
+    quad(V( W/2,0,-D/2), V( W/2,0, D/2), ridgeB, ridgeA, V( 1,.55,0));
+    quad(V(-W/2,0, D/2), V(-W/2,0,-D/2), ridgeA, ridgeB, V(-1,.55,0));
+    tri(V( W/2,0, D/2), V(-W/2,0, D/2), ridgeB, V(0,.55, 1));
+    tri(V(-W/2,0,-D/2), V( W/2,0,-D/2), ridgeA, V(0,.55,-1));
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv',       new THREE.Float32BufferAttribute(uv, 2));
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, mat);
+  m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
 
 function house(cfg){
   const g = new THREE.Group();
@@ -1597,60 +1881,151 @@ function house(cfg){
   const siding = sidingMats[cfg.pal % sidingMats.length];
   const roof   = roofMats[cfg.pal % roofMats.length];
 
+  // detail helper: same as box(), minus the shadow-map cost
+  const trim = (bw,bh,bd,mat,x,y,z)=>{
+    const m = box(bw,bh,bd,mat,x,y,z,g); m.castShadow = false; return m;
+  };
+
   // parcel: lawn, driveway, walk
   slab(w+26, d+34, M.grass, 0, Y.lot, 2, 0, g);
-  slab(9, 30, M.paver, -w/2+3, Y.walk, d/2+16, 0, g);      // driveway to the street
-  slab(3.4, 12, M.paver, 3, Y.walk+.02, d/2+7, 0, g);          // front walk
+  slab(9, 30, M.paver, -w/2+3, Y.walk, d/2+16, 0, g);   // driveway to the street
+  slab(3.4, 12, M.paver, 3, Y.walk+.02, d/2+7, 0, g);   // front walk
 
-  // main mass
-  const body = box(w, wallH, d, siding, 0, wallH/2, 0, g);
+  /* ---- foundation: the house needs to sit on something -------------------- */
+  trim(w+.9, 1.5, d+.9, M.concrete, 0, .75, 0);
+
+  /* ---- main mass --------------------------------------------------------- */
+  const body = box(w, wallH, d, siding, 0, wallH/2 + 1.4, 0, g);
   occluders.push(body);
 
-  // hipped roof: a squashed pyramid reads well at aerial distance
-  const rf = new THREE.Mesh(new THREE.ConeGeometry(Math.hypot(w,d)/2*1.02, 5.6, 4), roof);
-  rf.rotation.y = Math.PI/4; rf.position.y = wallH + 2.8; rf.castShadow = true; g.add(rf);
-  occluders.push(rf);
-  box(w+1.6, .5, d+1.6, roof, 0, wallH+.25, 0, g);      // eaves
+  // corner boards: the cheapest way to stop a box reading as one extrusion
+  for(const sx of [-1, 1]) for(const sz of [-1, 1])
+    trim(.55, wallH, .55, M.trim, sx*(w/2-.1), wallH/2 + 1.4, sz*(d/2-.1));
 
-  // garage wing
-  const gw = box(11, 6.6, 11, siding, -w/2-4.5, 3.3, d/2-4, g);
-  occluders.push(gw);
-  const grf = new THREE.Mesh(new THREE.ConeGeometry(8.2, 3.4, 4), roof);
-  grf.rotation.y = Math.PI/4; grf.position.set(-w/2-4.5, 8.2, d/2-4); grf.castShadow = true; g.add(grf);
-  box(7.6, 4.6, .4, M.stoneDark, -w/2-4.5, 2.3, d/2+1.7, g);   // garage door
+  // storey band on the two-storey plans, where the floor line would be
+  if(story === 2) trim(w+.3, .45, d+.3, M.trim, 0, 1.4 + 7.0, 0);
 
-  // porch + door + windows on the street face
-  box(11, .4, 5, M.white, 3, 6.9, d/2+2.4, g);
-  for(const px of [-1.4, 7.4]){
-    const c = new THREE.Mesh(new THREE.CylinderGeometry(.26,.26,6.6,10), M.white);
-    c.position.set(px, 3.3, d/2+4.6); c.castShadow = true; g.add(c);
+  /* ---- windows: recessed glass, proud frame, projecting sill -------------
+     The glass used to stand 0.15 outside the wall, which is why it read as a
+     sticker. Now it sits behind the plane and the frame casts onto it. */
+  function opening(cx, cy, ww, wh, face){
+    const z = face * (d/2);
+    const inset = .30;
+    trim(ww, wh, .12, M.glassDark, cx, cy, z - face*inset);        // glazing, set back
+    trim(ww+.9, .34, .30, M.frame, cx, cy + wh/2 + .17, z);        // head
+    trim(ww+.9, .30, .46, M.frame, cx, cy - wh/2 - .15, z + face*.06); // sill, projecting
+    for(const sx of [-1, 1])
+      trim(.34, wh, .30, M.frame, cx + sx*(ww/2 + .28), cy, z);    // jambs
+    trim(.16, wh*.96, .16, M.frame, cx, cy, z - face*(inset-.12)); // centre muntin
   }
-  box(3.4, 5.4, .35, M.woodDark, 3, 2.7, d/2+.2, g);           // front door
-  for(const px of [-6.5, 9.6]) box(3.4, 3.4, .3, M.glassDark, px, 4.2, d/2+.2, g);
-  if(story === 2)
-    for(const px of [-6.5, 1.5, 9.6]) box(3.2, 3.2, .3, M.glassDark, px, 9.6, d/2+.2, g);
 
-  // back patio
+  const yFront = 1.4;
+  for(const px of [-6.5, 9.6]) opening(px, yFront + 4.2, 3.4, 3.4, 1);
+  if(story === 2) for(const px of [-6.5, 1.5, 9.6]) opening(px, yFront + 9.6, 3.2, 3.2, 1);
+  // side and rear elevations, so the house isn't a facade with three blank walls
+  for(const sz of [-1, 1]){
+    if(sz === -1) for(const px of [-5, 5]) opening(px, yFront + 4.2, 3.0, 3.2, -1);
+  }
+
+  /* ---- front door with casing -------------------------------------------- */
+  trim(3.4, 5.4, .35, M.woodDark, 3, yFront + 2.7, d/2 + .2);
+  trim(4.3, .40, .52, M.trim, 3, yFront + 5.55, d/2 + .26);       // head casing
+  for(const sx of [-1, 1]) trim(.42, 5.6, .5, M.trim, 3 + sx*2.05, yFront + 2.8, d/2 + .24);
+  trim(4.6, .35, 1.9, M.concrete, 3, yFront - .1, d/2 + 1.3);     // stoop
+
+  /* ---- hipped roof, with an edge ---------------------------------------- */
+  const OH = 1.5;                            // eave overhang, all four sides
+  const eaveY = wallH + 1.4;
+  const rf = hipRoof(w, d, OH, story === 2 ? 6.0 : 5.2, roof);
+  rf.position.y = eaveY + .62;               // sits on top of the fascia band
+  g.add(rf);
+  occluders.push(rf);
+
+  // eave assembly: fascia band at the roof edge, soffit closing it underneath
+  const fas = box(w + OH*2, .62, d + OH*2, roof, 0, eaveY + .31, 0, g);
+  fas.castShadow = true;
+  trim(w + OH*2 - .1, .3, d + OH*2 - .1, M.trim, 0, eaveY - .01, 0);   // soffit
+  for(const sz of [-1, 1]){
+    const gut = new THREE.Mesh(new THREE.CylinderGeometry(.20,.20, w + OH*2, 8), M.gutter);
+    gut.rotation.z = Math.PI/2; gut.position.set(0, eaveY + .04, sz*(d/2 + OH - .1));
+    g.add(gut);
+  }
+  // downspouts at the front corners
+  for(const sx of [-1, 1]){
+    const dsp = new THREE.Mesh(new THREE.CylinderGeometry(.16,.16, wallH + 1.2, 6), M.gutter);
+    dsp.position.set(sx*(w/2 - .1), (wallH + 1.2)/2 + 1.0, d/2 + OH - .3); g.add(dsp);
+  }
+
+  // chimney on some plans — pure silhouette value for four boxes
+  if(cfg.pal % 2 === 0){
+    const ch = box(2.6, story === 2 ? 8.0 : 6.4, 2.2, M.brick,
+                   -w/2 + 4.5, wallH + 1.4 + (story === 2 ? 2.2 : 1.4), -d/4, g);
+    ch.castShadow = true;
+    trim(3.1, .4, 2.7, M.concrete, -w/2 + 4.5,
+         wallH + 1.4 + (story === 2 ? 6.4 : 4.8), -d/4);            // cap
+  }
+
+  /* ---- garage wing ------------------------------------------------------- */
+  const gw = box(11, 6.6, 11, siding, -w/2-4.5, 3.3 + 1.0, d/2-4, g);
+  occluders.push(gw);
+  trim(11.4, 1.1, 11.4, M.concrete, -w/2-4.5, .55, d/2-4);          // its own footing
+  for(const sx of [-1, 1]) for(const sz of [-1, 1])
+    trim(.5, 6.6, .5, M.trim, -w/2-4.5 + sx*5.4, 4.3, d/2-4 + sz*5.4);
+  const gEaveY = 6.6 + 1.0;
+  const grf = hipRoof(11, 11, 1.2, 3.2, roof);
+  grf.position.set(-w/2-4.5, gEaveY + .5, d/2-4); g.add(grf);
+  const gfas = box(11 + 2.4, .5, 11 + 2.4, roof, -w/2-4.5, gEaveY + .25, d/2-4, g);
+  gfas.castShadow = true;
+  trim(11 + 2.3, .26, 11 + 2.3, M.trim, -w/2-4.5, gEaveY - .01, d/2-4);   // soffit
+
+  // garage door: recessed, with panel courses
+  trim(7.6, 4.6, .3, M.stoneDark, -w/2-4.5, 3.3, d/2+1.5);
+  for(let i=0;i<4;i++)
+    trim(7.2, .12, .1, M.concrete, -w/2-4.5, 1.5 + i*1.05, d/2+1.68);
+  trim(8.4, .42, .55, M.trim, -w/2-4.5, 5.75, d/2+1.62);            // door head
+  for(const sx of [-1, 1]) trim(.42, 4.8, .55, M.trim, -w/2-4.5 + sx*4.0, 3.3, d/2+1.62);
+
+  /* ---- porch: deck, columns with base and cap, beam, railing ------------- */
+  trim(11.5, .45, 5.4, M.concrete, 3, yFront - .18, d/2 + 2.6);     // deck
+  const porchRoofY = yFront + 5.9;
+  const pr = box(12, .42, 6.0, roof, 3, porchRoofY, d/2 + 2.7, g);
+  pr.castShadow = true;
+  const phip = hipRoof(11.2, 5.2, .4, 1.1, roof);
+  phip.position.set(3, porchRoofY + .21, d/2 + 2.7); g.add(phip);
+  trim(12.4, .40, 6.4, M.trim, 3, porchRoofY - .38, d/2 + 2.7);     // its soffit
+  trim(12, .34, .34, M.trim, 3, porchRoofY - .62, d/2 + 5.6);       // beam at the front
+  for(const px of [-1.4, 7.4]){
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(.26,.26,5.4,10), M.white);
+    c.position.set(px, yFront + 2.7, d/2+4.6); c.castShadow = true; g.add(c);
+    trim(.78, .34, .78, M.trim, px, yFront + .12, d/2+4.6);         // base
+    trim(.72, .30, .72, M.trim, px, yFront + 5.5, d/2+4.6);         // cap
+  }
+  // railing between the columns, on the open side only
+  trim(8.6, .22, .22, M.white, 3, yFront + 2.5, d/2+4.6);
+  for(let bx = -0.6; bx <= 6.8; bx += 1.05)
+    trim(.13, 2.3, .13, M.white, bx, yFront + 1.3, d/2+4.6);
+
+  /* ---- back patio -------------------------------------------------------- */
   slab(w-2, 9, M.paver, 0, Y.walk, -d/2-5, 0, g);
 
-  /* One hit/highlight slab per floor, on the two-story plans only — the ones a
-     point of interest can offer a choice of. Sized just proud of the walls so a
-     lit floor reads as that storey rather than z-fighting with the siding. */
+  /* One hit/highlight slab per floor, on the two-story plans only. Offset by the
+     1.4 foundation course this build sits every mass on, so the bands line up
+     with the walls rather than the ground. */
   const bands = [];
   if(story === 2){
     const fh = wallH/2;
     for(let i=1;i<=2;i++){
       const b = new THREE.Mesh(new THREE.BoxGeometry(w+1.0, fh*0.9, d+1.0), M.floorIdle);
-      b.position.y = (i-1)*fh + fh/2;
+      b.position.y = 1.4 + (i-1)*fh + fh/2;
       b.userData.isBand = true; b.userData.floor = i;
       g.add(b); bands[i] = b;
     }
   }
   /* A plate per floor, shown only while that floor is the cut one, plus interior
-     partitions so the cut reveals rooms rather than an open box. These sit
-     inside the wall mass, hidden by it until the house is sectioned or made
-     translucent — which is exactly when you want to see them. Proportional to
-     the plan, so they hold up across the different widths in the community. */
+     partitions so the cut reveals rooms rather than an open box. The partitions
+     sit inside the wall mass and are hidden by it until the house is sectioned
+     or made translucent — exactly when you want to see them. Everything is
+     offset by the foundation course this build sits on. */
   const plates = [];
   if(story === 2){
     // stopping short of the ceiling keeps the tops clear of the cut plane and
@@ -1662,7 +2037,7 @@ function house(cfg){
       return m;
     };
     for(let i=1;i<=2;i++){
-      const y0 = (i-1)*fh;
+      const y0 = 1.4 + (i-1)*fh;
       const pl = new THREE.Mesh(new THREE.BoxGeometry(w+0.4, .3, d+0.4), M.floorPlate);
       pl.position.y = y0 + .15;
       pl.userData.isPlate = true; pl.visible = false; pl.receiveShadow = true;
@@ -1670,20 +2045,21 @@ function house(cfg){
 
       if(i === 1){
         // living side open to the rear, entry and stair core toward the street
-        wall(T, d*0.52, -w*0.12, y0, -d*0.24);        // great room / kitchen spine
-        wall(w*0.44, T,  w*0.28, y0,  d*0.06);        // entry off the porch
-        wall(T, d*0.40,  w*0.06, y0,  d*0.30);        // stair core
+        wall(T, d*0.52, -w*0.12, y0, -d*0.24);
+        wall(w*0.44, T,  w*0.28, y0,  d*0.06);
+        wall(T, d*0.40,  w*0.06, y0,  d*0.30);
       } else {
         // a corridor down the middle with rooms either side
-        wall(w*0.62, T, -w*0.06, y0,  d*0.10);        // corridor, street side
-        wall(w*0.62, T, -w*0.06, y0, -d*0.16);        // corridor, rear side
-        wall(T, d*0.30,  w*0.10, y0, -d*0.30);        // primary suite
-        wall(T, d*0.26, -w*0.22, y0,  d*0.28);        // secondary bedrooms
+        wall(w*0.62, T, -w*0.06, y0,  d*0.10);
+        wall(w*0.62, T, -w*0.06, y0, -d*0.16);
+        wall(T, d*0.30,  w*0.10, y0, -d*0.30);
+        wall(T, d*0.26, -w*0.22, y0,  d*0.28);
       }
     }
   }
   g.userData.bands = bands; g.userData.plates = plates;
-  g.userData.floors = story; g.userData.fh = wallH/2; g.userData.base = 0;
+  g.userData.floors = story; g.userData.fh = wallH/2;
+  g.userData.base = 1.4;
   g.userData.plan = {w, d};        // footprint, for framing a cut floor as a plan
   return g;
 }
@@ -1997,6 +2373,7 @@ function applyReveal(dt){
   const pond = new THREE.Mesh(new THREE.CircleGeometry(15, 32), M.water);
   pond.rotation.x = -Math.PI/2; pond.position.set(6, Y.walk + .02, -4); g.add(pond);
   const rim = new THREE.Mesh(new THREE.RingGeometry(15, 17.4, 32), M.stoneDark);
+  rim.renderOrder = 1;   // sits over the pond edge rather than fighting it
   rim.rotation.x = -Math.PI/2; rim.position.set(6, Y.walk, -4); g.add(rim);
   // path looping the pond
   for(let i=0;i<26;i++){
@@ -2126,7 +2503,7 @@ const POIS = [
     desc:'Two-story plan on the cul-de-sac, open great room with a 20 ft ridge and a covered patio across the rear.',
     pos:new THREE.Vector3(0, 14, -152),
     front:[0, 1],                                    // faces the cul-de-sac
-    frame:{x:0, y:9, z:-150, w:48, h:28}, yaw:0.24, phi:1.30,
+    frame:{x:0, y:10, z:-150, w:48, h:30}, yaw:0.24, phi:1.30,
     interior:'greatroom',
     houseRef:'model',
     // top down, so moving down the list moves down the building
@@ -2142,7 +2519,7 @@ const POIS = [
     desc:'Two-story elevation facing the community spine, with the primary suite over the front porch.',
     pos:new THREE.Vector3(-43, 14, 16),
     front:[1, 0],                                    // faces east onto the street
-    frame:{x:-41, y:8, z:16, w:44, h:26}, yaw:0.26, phi:1.30,
+    frame:{x:-41, y:9, z:16, w:44, h:28}, yaw:0.26, phi:1.30,
     interior:'primary',
     houseRef:'homesite14',
     floors:[
@@ -2172,7 +2549,7 @@ const POIS = [
     desc:'Largest plan on the east row, backing onto the greenbelt with a three-car garage.',
     pos:new THREE.Vector3(43, 14, -24),
     front:[-1, 0],                                   // faces west onto the street
-    frame:{x:41, y:8, z:-24, w:44, h:26}, yaw:0.28, phi:1.30,
+    frame:{x:41, y:9, z:-24, w:44, h:28}, yaw:0.28, phi:1.30,
     interior:'greatroom',
     preview:{pos:[12,4.6,9], look:[-10,2.8,-8]},
     houseRef:'homesite22',
@@ -3418,14 +3795,13 @@ function flyTo(f){
   rig.auto = false; rig.idle = 0;
 }
 
-/* The same elevation, pushed in to one floor. Heading, tilt and the leftward
-   offset carry over from the whole-house shot — only height and distance change
-   — so it reads as moving closer, not as a cut somewhere else. Up close the
-   house gets more of the width than the full elevation does, or the width would
-   set the distance and the floor would stay a sliver. */
+/* The whole-house shot pushed in to one floor and tilted down. Heading and the
+   leftward offset carry over; height, distance and tilt change. The look-at
+   height includes the foundation course this build sits on, so it lands on the
+   floor rather than below it. */
 function floorFocus(p, fl){
   const g    = HOUSES[p.houseRef];
-  const fh   = g.userData.fh;
+  const fh   = g.userData.fh, base = g.userData.base || 0;
   const plan = g.userData.plan || {w:p.frame.w*0.7, d:p.frame.w*0.55};
   const vfov = camera.fov * Math.PI/180;
   const hfov = 2*Math.atan(Math.tan(vfov/2) * camera.aspect);
@@ -3440,9 +3816,8 @@ function floorFocus(p, fl){
   /* The section leaves a stump: everything from the ground up to the cut is
      still standing, and that whole stump is the subject — not the one storey.
      So frame its height and aim at its middle. CONTEXT caps how much of a tall
-     stack gets framed; two homes storeys always fit inside it. */
-  const CONTEXT = 2.6;
-  const base   = g.userData.base || 0;
+     stack gets framed; two storeys and the foundation always fit inside it. */
+  const CONTEXT = 2.9;
   const cut    = base + fl.n * fh;                       // top of what survives
   const framed = Math.min(cut, CONTEXT * fh);            // vertical band to fit
   // seen from that tilt, the plan foreshortens and the walls add their own height
@@ -3635,6 +4010,8 @@ function shootPreviews(){
     if(p.secondary){ setTimeout(step, 0); return; }   // no tour, nothing to shoot
     const cfg = INTERIORS[p.interior] || INTERIORS.lobby;
     const view = p.preview || cfg.hero || cfg.stops[0];
+    const heldEnv = interior.environment;
+    interior.environment = null;   // belongs to the main context, not this one
     try{
       clearInterior();
       cfg.build();
@@ -3644,6 +4021,7 @@ function shootPreviews(){
       previews[p.id] = shot.domElement.toDataURL('image/jpeg', 0.86);
       if(activePOI && activePOI.id === p.id) paintCardArt(p);   // card already open
     } catch(err){ /* skip this preview, keep the wash */ }
+    finally{ interior.environment = heldEnv; }
     clearInterior();
     setTimeout(step, 90);
   })();

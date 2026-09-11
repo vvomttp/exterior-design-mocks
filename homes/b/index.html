@@ -1168,9 +1168,33 @@ function makeSky(c){
   return new THREE.Mesh(g,m);
 }
 /* No sky sphere: the capture reads as an object floating in black, the way
-   a real one does in a viewer. makeSky is kept because the fidelity build
-   still samples it for image-based lighting. */
+   a real one does in a viewer. makeSky is kept anyway — nothing renders it,
+   but the image-based lighting below samples it for the environment map, so
+   deleting it would flatten every reflective surface in the scene. */
 exterior.background = new THREE.Color(0x000000);
+
+/* ---------------------------------------------------- image-based lighting
+   The materials were already lit, but nothing was reflected: `glass` at
+   metalness .85 is physically a mirror, and it was mirroring a void, so it
+   rendered as flat grey. Bake the procedural sky into a PMREM cubemap once at
+   startup and hand it to both scenes as `environment`; every rough surface
+   picks up sky bounce and every smooth one finally has something to show.
+   Built from a throwaway scene holding a second sky sphere, because the one
+   above is parented to `exterior` and PMREMGenerator wants a scene of its own. */
+const envMap = (()=>{
+  try{
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    // The visible sky is black, but a black cubemap lights nothing — sample a
+    // neutral daylight gradient instead, so glass and metal still have
+    // something to reflect against the dark backdrop.
+    const skyScene = new THREE.Scene();
+    skyScene.add(makeSky([0x3f7fc4, 0xa9cbe8, 0xe8eef2]));
+    const rt = pmrem.fromScene(skyScene, 0, 1, 3000);
+    pmrem.dispose();
+    return rt.texture;
+  } catch(err){ return null; }   // no float render targets — fall back to the old flat look
+})();
+if(envMap){ exterior.environment = envMap; interior.environment = envMap; }
 
 /* ------------------------------------------------------------------ lights */
 function lightRig(scene, sunPos, intensity, ambient, shadowSpan){
@@ -1256,6 +1280,182 @@ const SIDING = [0xe8e2d6, 0xd8dbd6, 0xcfd6dc, 0xe4d8c8, 0xd2cec6, 0xdfe3e6];
 const ROOFS  = [0x5c5a57, 0x6b5f52, 0x4f5b62, 0x726257, 0x585f5c];
 const sidingMats = SIDING.map(c=> new THREE.MeshStandardMaterial({color:c, roughness:.85}));
 const roofMats   = ROOFS.map(c=> new THREE.MeshStandardMaterial({color:c, roughness:.7, flatShading:true}));
+
+/* ============================================================== SURFACE MAPS
+   Flat colour reads as a diagram rather than a place. These maps are drawn on
+   canvas at runtime — no asset files, no fetch, so the page still opens by
+   double-click — and the normal maps are derived from the same canvases with a
+   Sobel pass, so relief always agrees with the pattern that produced it.
+
+   Albedo gets sRGBEncoding; normal maps are raw data and must not, or the
+   lighting goes soft and wrong.
+
+   This block sits below sidingMats and roofMats rather than up with the lights
+   where its twin does in the multi-entry file, because the siding and roof
+   loops write onto those arrays and would hit a temporal dead zone from any
+   earlier position. Everything else here is order-independent: materials are
+   live objects, so dressing them after the ground slabs are built still
+   reaches the meshes already using them. */
+
+const MAXA = renderer.capabilities.getMaxAnisotropy();
+
+function canvasOf(w, h, draw){
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  return c;
+}
+
+function texOf(canvas, rx, ry, srgb){
+  const t = new THREE.CanvasTexture(canvas);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(rx, ry);
+  t.anisotropy = MAXA;
+  if(srgb) t.encoding = THREE.sRGBEncoding;
+  return t;
+}
+
+/* Sobel over luminance → tangent-space normals. Cheap, and it means a texture
+   and its relief can never drift apart. */
+function normalOf(canvas, strength, rx, ry){
+  const w = canvas.width, h = canvas.height;
+  const src = canvas.getContext('2d').getImageData(0,0,w,h).data;
+  const lum = new Float32Array(w*h);
+  for(let i=0;i<w*h;i++) lum[i] = (src[i*4]*0.299 + src[i*4+1]*0.587 + src[i*4+2]*0.114)/255;
+  const out = canvasOf(w, h, (ctx)=>{
+    const img = ctx.createImageData(w,h);
+    const at = (x,y)=> lum[((y+h)%h)*w + ((x+w)%w)];
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+      const dx = (at(x+1,y-1) + 2*at(x+1,y) + at(x+1,y+1))
+               - (at(x-1,y-1) + 2*at(x-1,y) + at(x-1,y+1));
+      const dy = (at(x-1,y+1) + 2*at(x,y+1) + at(x+1,y+1))
+               - (at(x-1,y-1) + 2*at(x,y-1) + at(x+1,y-1));
+      let nx = -dx*strength, ny = -dy*strength, nz = 1;
+      const l = Math.hypot(nx,ny,nz); nx/=l; ny/=l; nz/=l;
+      const i = (y*w+x)*4;
+      img.data[i]   = (nx*0.5+0.5)*255;
+      img.data[i+1] = (ny*0.5+0.5)*255;
+      img.data[i+2] = (nz*0.5+0.5)*255;
+      img.data[i+3] = 255;
+    }
+    ctx.putImageData(img,0,0);
+  });
+  return texOf(out, rx, ry, false);
+}
+
+// value noise, tiling by construction so nothing seams at the repeat
+function grain(ctx, w, h, n, min, max, alpha){
+  for(let i=0;i<n;i++){
+    const r = min + Math.random()*(max-min);
+    ctx.globalAlpha = alpha * (0.35 + Math.random()*0.65);
+    ctx.fillStyle = Math.random() < .5 ? '#000' : '#fff';
+    const x = Math.random()*w, y = Math.random()*h;
+    for(const [ox,oy] of [[0,0],[w,0],[-w,0],[0,h],[0,-h]]){
+      ctx.beginPath(); ctx.arc(x+ox, y+oy, r, 0, 6.2832); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ---- horizontal lap siding: boards with a shadow line under each course --- */
+function sidingCanvas(hex){
+  return canvasOf(256, 256, (ctx,w,h)=>{
+    ctx.fillStyle = hex; ctx.fillRect(0,0,w,h);
+    const course = 16;
+    for(let y=0;y<h;y+=course){
+      ctx.fillStyle = 'rgba(0,0,0,.16)';           // reveal at the board lap
+      ctx.fillRect(0, y+course-2, w, 2);
+      ctx.fillStyle = 'rgba(255,255,255,.05)';     // light catch just below it
+      ctx.fillRect(0, y+course, w, 1);
+      ctx.fillStyle = 'rgba(0,0,0,' + (0.012 + Math.random()*0.02).toFixed(3) + ')';
+      ctx.fillRect(0, y, w, course-2);             // per-board tone variance
+    }
+    grain(ctx, w, h, 260, .4, 1.6, .05);
+  });
+}
+
+/* ---- asphalt shingles: staggered courses, tabs, weathered per-tab tone ---- */
+function shingleCanvas(hex){
+  return canvasOf(256, 256, (ctx,w,h)=>{
+    ctx.fillStyle = hex; ctx.fillRect(0,0,w,h);
+    const ch = 22, tw = 34;
+    for(let row=0, y=0; y<h+ch; row++, y+=ch){
+      const off = (row % 2) ? tw/2 : 0;
+      for(let x=-tw; x<w+tw; x+=tw){
+        ctx.fillStyle = 'rgba(0,0,0,' + (0.05 + Math.random()*0.11).toFixed(3) + ')';
+        ctx.fillRect(x+off, y, tw-2, ch-3);
+        ctx.fillStyle = 'rgba(0,0,0,.30)';         // keyway between tabs
+        ctx.fillRect(x+off+tw-2, y, 2, ch-3);
+      }
+      ctx.fillStyle = 'rgba(0,0,0,.34)';           // butt-edge shadow
+      ctx.fillRect(0, y+ch-3, w, 3);
+    }
+    grain(ctx, w, h, 900, .3, 1.1, .12);           // mineral granules
+  });
+}
+
+function flatCanvas(hex, n, min, max, alpha, extra){
+  return canvasOf(256, 256, (ctx,w,h)=>{
+    ctx.fillStyle = hex; ctx.fillRect(0,0,w,h);
+    if(extra) extra(ctx,w,h);
+    grain(ctx, w, h, n, min, max, alpha);
+  });
+}
+
+const hex = n => '#' + n.toString(16).padStart(6,'0');
+
+// siding + roofs, one map per palette entry
+SIDING.forEach((c,i)=>{
+  const cv = sidingCanvas(hex(c));
+  sidingMats[i].map         = texOf(cv, 4, 3, true);
+  sidingMats[i].normalMap   = normalOf(cv, 2.2, 4, 3);
+  sidingMats[i].normalScale = new THREE.Vector2(.7,.7);
+  sidingMats[i].envMapIntensity = .85;
+  sidingMats[i].needsUpdate = true;
+});
+ROOFS.forEach((c,i)=>{
+  const cv = shingleCanvas(hex(c));
+  roofMats[i].map          = texOf(cv, 3, 3, true);
+  roofMats[i].normalMap    = normalOf(cv, 3.0, 3, 3);
+  roofMats[i].normalScale  = new THREE.Vector2(1,1);
+  roofMats[i].flatShading  = false;   // the shingle relief now does this job better
+  roofMats[i].envMapIntensity = .7;
+  roofMats[i].needsUpdate  = true;
+});
+
+/* ---- ground planes carry the most screen area, so they matter most ------- */
+function dress(mat, canvas, rx, ry, nStrength, envI){
+  mat.map = texOf(canvas, rx, ry, true);
+  mat.normalMap = normalOf(canvas, nStrength, rx, ry);
+  mat.normalScale = new THREE.Vector2(.6,.6);
+  if(envI != null) mat.envMapIntensity = envI;
+  mat.needsUpdate = true;
+}
+
+dress(M.grass,     flatCanvas('#7fa25c', 1400, .5, 2.4, .16), 90, 90, 1.4, .8);
+dress(M.grassDark, flatCanvas('#6b8d4c', 1400, .5, 2.4, .16), 140, 140, 1.4, .8);
+dress(M.asphalt,   flatCanvas('#50555c', 1800, .3, 1.3, .18), 26, 26, 1.1, .55);
+dress(M.concrete,  flatCanvas('#c3c6c9', 900, .4, 1.8, .07), 22, 22, .9, .8);
+dress(M.stone,     flatCanvas('#dcd8d0', 700, .5, 2.0, .06), 6, 6, .9, .8);
+dress(M.stoneDark, flatCanvas('#b8b3aa', 700, .5, 2.0, .06), 6, 6, .9, .8);
+
+// pavers keep their joints, so they get a grid rather than pure noise
+dress(M.paver, flatCanvas('#d7cfc2', 300, .4, 1.4, .05, (ctx,w,h)=>{
+  ctx.strokeStyle = 'rgba(0,0,0,.20)'; ctx.lineWidth = 2;
+  for(let i=0;i<=w;i+=32){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,h); ctx.stroke(); }
+  for(let j=0;j<=h;j+=32){ ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(w,j); ctx.stroke(); }
+}), 14, 14, 1.6, .8);
+
+/* Glass and metal were the worst offenders without a cubemap — push their
+   contribution up now that there is one to sample. */
+[M.glass, M.glassDark].forEach(m=>{ m.envMapIntensity = 1.5; m.needsUpdate = true; });
+M.metal.envMapIntensity = 1.25;
+M.water.envMapIntensity = 1.6;
+M.spandrel.envMapIntensity = .9;
+
+/* The sky is now doing part of the ambient job, so pull the hemisphere light
+   back to keep the overall exposure where it was. */
+exterior.traverse(o=>{ if(o.isHemisphereLight) o.intensity *= 0.72; });
 
 function house(cfg){
   const g = new THREE.Group();

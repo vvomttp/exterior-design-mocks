@@ -61,8 +61,10 @@
   ul{list-style:none;margin:0;padding:0;
      display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:stretch}
   li{display:flex}
-  /* the fidelity test is a rendering exploration, not a fifth strategy — it
-     runs full width under the residential row and drops the Q&A entirely */
+  /* a study rather than a strategy: it runs full width under the two-up rows
+     so it does not read as a third option alongside A and B. The rendering
+     study used this before it was promoted into homes/a; the loading study
+     uses it now. */
   li.wide{grid-column:1 / -1}
   ul + .group{margin-top:26px}
   .group{display:flex;align-items:center;gap:9px;
@@ -240,24 +242,6 @@
         </span>
         <span class="txt">
           <span class="name">Single-home listings</span>
-        </span>
-        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
-      </a>
-    </li>
-    <li class="wide">
-      <a class="card a" href="homes/a-hifi/index.html">
-        <span class="badge">
-          <!-- half-shaded sphere: this card is about how the scene is rendered,
-               not about how many ways there are into it -->
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="8.2"/>
-            <path class="solid" d="M12 3.8a8.2 8.2 0 0 1 0 16.4z"/>
-          </svg>
-        </span>
-        <span class="txt">
-          <span class="eyebrow">Aside</span>
-          <span class="name">Rendering study</span>
-          <span class="desc">Same interaction as A, with sky-based reflections and procedural material maps — open beside A to compare</span>
         </span>
         <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
       </a>

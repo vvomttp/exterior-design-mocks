@@ -461,29 +461,36 @@
   .frdot.leased .frPip{background:rgba(255,255,255,.55)}
   .frdot.leased .frLbl{color:#5b6675}
 
-  /* Inside a floor, the counter keeps its corner. It used to give the chip up
-     to the way back, on the reasoning that stepping between points is the wrong
-     move when you are one level inside one of them — but the pager is also how
-     you know where you are in the set, and losing it mid-flow costs more than
-     the corner is worth.
+  /* Inside a floor, the counter keeps its corner — the pager is also how you
+     know where you are in the set, and losing it mid-flow costs more than the
+     corner is worth. So the two ways out of a floor share one row in the
+     footer instead: left backs out to the stack, right goes forward into the
+     tour.
 
-     So the way back moves into the footer, under the CTA rather than beside it.
-     Down here it reads as the quieter of two ways out of this floor, which is
-     what it is now that the rail handles moving between floors: this one is for
-     backing out to the whole elevation and its floor-by-floor list. Stacking
-     says "secondary" without needing a second border weight to say it.
+     That left/right split is what carries the direction now, which is why the
+     back button needs no chevron of its own. Only #launch keeps one, so the
+     button with a forward arrow is the forward action, and the row never shows
+     two arrows pointing away from each other.
 
-     It also carries more weight on a tower than it does on a house: a leased
-     floor hides the CTA entirely, so on those floors this is the only way out
-     of the card besides closing it. */
-  #cardBack{display:none;margin-top:9px;width:100%;height:30px;
-    border:none;background:none;border-radius:999px;
-    align-items:center;justify-content:center;gap:5px;
-    font-size:12px;font-weight:650;letter-spacing:-.01em;color:var(--muted);
-    transition:background .14s ease,color .14s ease}
-  #cardBack:hover{background:rgba(15,23,38,.05);color:var(--ink)}
-  #cardBack svg{width:15px;height:15px;flex:none;stroke:currentColor;stroke-width:2.1;
-    fill:none;stroke-linecap:round;stroke-linejoin:round}
+     Both flex from a zero basis at 1 : 1.6, which does three jobs with one
+     pair of numbers. Together, the primary takes about 62% and reads as
+     dominant. Alone — a single-entry point, where there is no stack to go back
+     to — the CTA fills the row exactly as it did before this was a row at all.
+     And that third case matters most here: a leased floor hides the CTA
+     entirely, so on those floors this is the only way out of the card besides
+     closing it, and the flex ratio lets it fill the row rather than sitting
+     stranded at 38% of it.
+
+     Margins sit on the buttons rather than on the row, so a card with neither
+     of them — a secondary point, or the floor stack itself — collapses to
+     nothing rather than leaving the row's margin behind. */
+  #cardActions{display:flex;align-items:stretch;gap:8px}
+  #cardBack{display:none;flex:1;margin-top:16px;height:38px;padding:0 10px;
+    border:1px solid var(--line);background:none;border-radius:999px;
+    align-items:center;justify-content:center;
+    font-size:12.5px;font-weight:650;letter-spacing:-.01em;color:var(--ink);
+    transition:background .14s ease,border-color .14s ease}
+  #cardBack:hover{background:rgba(15,23,38,.05);border-color:rgba(11,18,32,.22)}
   #card.floordetail #cardBack{display:flex}
 
   /* ---- text-only card ----
@@ -508,7 +515,7 @@
      70% translucent, because this one sits on solid white paper instead of the
      3D scene, where the translucency would wash out to mid grey. */
   #launch{
-    margin-top:16px;width:100%;height:38px;border-radius:999px;
+    margin-top:16px;flex:1.6;min-width:0;height:38px;border-radius:999px;
     background:rgba(51,51,51,.94);border:1px solid rgba(112,112,112,.5);color:#fff;
     display:flex;align-items:center;justify-content:center;gap:7px;
     font-size:12.5px;font-weight:650;letter-spacing:-.01em;
@@ -1129,14 +1136,16 @@
     <div id="cardSub">—</div>
     <div id="floorList"></div>
     <div id="cardDesc">—</div>
-    <button id="launch">
-      <span>Inside</span>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
-    </button>
-    <!-- Same button as before, moved out of the art's top-left corner and into
-         the footer so the counter can keep that chip. Its id and handler are
-         unchanged. -->
-    <button id="cardBack"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>All floors</span></button>
+    <!-- Back sits first so it lands left of the CTA: leftward reads as
+         backward, which is what lets it drop its own chevron. Same id and
+         handler as when it was a chip on the artwork. -->
+    <div id="cardActions">
+      <button id="cardBack"><span>All floors</span></button>
+      <button id="launch">
+        <span>Inside</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -1515,9 +1524,35 @@ function makeSky(c){
   return new THREE.Mesh(g,m);
 }
 /* No sky sphere: the capture reads as an object floating in black, the way
-   a real one does in a viewer. makeSky is kept because the fidelity build
-   still samples it for image-based lighting. */
+   a real one does in a viewer. makeSky is kept anyway — nothing renders it,
+   but the image-based lighting below samples it for the environment map, so
+   deleting it would flatten every reflective surface in the scene. */
 exterior.background = new THREE.Color(0x000000);
+
+/* ---------------------------------------------------- image-based lighting
+   This matters more on a campus than it does on a housing site: a tower is
+   mostly curtain wall, and `glass` at metalness .85 is physically a mirror.
+   With nothing to mirror it rendered flat grey — two glass towers' worth of
+   flat grey. Bake the procedural sky into a PMREM cubemap once at startup and
+   hand it to both scenes as `environment`; every rough surface picks up sky
+   bounce and every smooth one finally has something to show.
+
+   Built from a throwaway scene holding its own sky sphere, because the one
+   above is parented to `exterior` and PMREMGenerator wants a scene of its own. */
+const envMap = (()=>{
+  try{
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    // The visible sky is black, but a black cubemap lights nothing — sample a
+    // neutral daylight gradient instead, so glass and metal still have
+    // something to reflect against the dark backdrop.
+    const skyScene = new THREE.Scene();
+    skyScene.add(makeSky([0x3f7fc4, 0xa9cbe8, 0xe8eef2]));
+    const rt = pmrem.fromScene(skyScene, 0, 1, 3000);
+    pmrem.dispose();
+    return rt.texture;
+  } catch(err){ return null; }   // no float render targets — fall back to the old flat look
+})();
+if(envMap){ exterior.environment = envMap; interior.environment = envMap; }
 
 /* ------------------------------------------------------------------ lights */
 function lightRig(scene, sunPos, intensity, ambient, shadowSpan){
@@ -1540,6 +1575,144 @@ function lightRig(scene, sunPos, intensity, ambient, shadowSpan){
   return sun;
 }
 lightRig(exterior, {x:120,y:170,z:90}, 2.0, .62, 170);
+
+/* ============================================================== SURFACE MAPS
+   Flat colour reads as a diagram rather than a place, and on a campus the
+   ground is most of the diagram: a parking field and its aisles cover more
+   screen area than either tower. So the maps here are all ground and cladding
+   — there is deliberately no equivalent of the residential siding and shingle
+   maps, because a tower's skin is already articulated by geometry. The
+   spandrel bands and mullion fins are real boxes, 0.85 and 0.5 units across,
+   and a panel map on members that small would be invisible at best and moiré
+   at worst.
+
+   Drawn on canvas at runtime — no asset files, no fetch, so the page still
+   opens by double-click — and the normal maps are derived from the same
+   canvases with a Sobel pass, so relief always agrees with the pattern that
+   produced it.
+
+   Albedo gets sRGBEncoding; normal maps are raw data and must not, or the
+   lighting goes soft and wrong.
+
+   The repeat counts came from the housing site, which has a mean capture
+   radius of 285 against this one's 330. Texel scale therefore runs about 16%
+   coarser here. That is the first thing to retune if the ground reads soft,
+   and it needs a browser to judge. */
+
+const MAXA = renderer.capabilities.getMaxAnisotropy();
+
+function canvasOf(w, h, draw){
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  return c;
+}
+
+function texOf(canvas, rx, ry, srgb){
+  const t = new THREE.CanvasTexture(canvas);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(rx, ry);
+  t.anisotropy = MAXA;
+  if(srgb) t.encoding = THREE.sRGBEncoding;
+  return t;
+}
+
+/* Sobel over luminance → tangent-space normals. Cheap, and it means a texture
+   and its relief can never drift apart. */
+function normalOf(canvas, strength, rx, ry){
+  const w = canvas.width, h = canvas.height;
+  const src = canvas.getContext('2d').getImageData(0,0,w,h).data;
+  const lum = new Float32Array(w*h);
+  for(let i=0;i<w*h;i++) lum[i] = (src[i*4]*0.299 + src[i*4+1]*0.587 + src[i*4+2]*0.114)/255;
+  const out = canvasOf(w, h, (ctx)=>{
+    const img = ctx.createImageData(w,h);
+    const at = (x,y)=> lum[((y+h)%h)*w + ((x+w)%w)];
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+      const dx = (at(x+1,y-1) + 2*at(x+1,y) + at(x+1,y+1))
+               - (at(x-1,y-1) + 2*at(x-1,y) + at(x-1,y+1));
+      const dy = (at(x-1,y+1) + 2*at(x,y+1) + at(x+1,y+1))
+               - (at(x-1,y-1) + 2*at(x,y-1) + at(x+1,y-1));
+      let nx = -dx*strength, ny = -dy*strength, nz = 1;
+      const l = Math.hypot(nx,ny,nz); nx/=l; ny/=l; nz/=l;
+      const i = (y*w+x)*4;
+      img.data[i]   = (nx*0.5+0.5)*255;
+      img.data[i+1] = (ny*0.5+0.5)*255;
+      img.data[i+2] = (nz*0.5+0.5)*255;
+      img.data[i+3] = 255;
+    }
+    ctx.putImageData(img,0,0);
+  });
+  return texOf(out, rx, ry, false);
+}
+
+// value noise, tiling by construction so nothing seams at the repeat
+function grain(ctx, w, h, n, min, max, alpha){
+  for(let i=0;i<n;i++){
+    const r = min + Math.random()*(max-min);
+    ctx.globalAlpha = alpha * (0.35 + Math.random()*0.65);
+    ctx.fillStyle = Math.random() < .5 ? '#000' : '#fff';
+    const x = Math.random()*w, y = Math.random()*h;
+    for(const [ox,oy] of [[0,0],[w,0],[-w,0],[0,h],[0,-h]]){
+      ctx.beginPath(); ctx.arc(x+ox, y+oy, r, 0, 6.2832); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function flatCanvas(hex, n, min, max, alpha, extra){
+  return canvasOf(256, 256, (ctx,w,h)=>{
+    ctx.fillStyle = hex; ctx.fillRect(0,0,w,h);
+    if(extra) extra(ctx,w,h);
+    grain(ctx, w, h, n, min, max, alpha);
+  });
+}
+
+const hex = n => '#' + n.toString(16).padStart(6,'0');
+
+/* ---- ground planes carry the most screen area, so they matter most ------- */
+function dress(mat, canvas, rx, ry, nStrength, envI){
+  mat.map = texOf(canvas, rx, ry, true);
+  mat.normalMap = normalOf(canvas, nStrength, rx, ry);
+  mat.normalScale = new THREE.Vector2(.6,.6);
+  if(envI != null) mat.envMapIntensity = envI;
+  mat.needsUpdate = true;
+}
+
+dress(M.grass,     flatCanvas('#7fa25c', 1400, .5, 2.4, .16), 90, 90, 1.4, .8);
+dress(M.grassDark, flatCanvas('#6b8d4c', 1400, .5, 2.4, .16), 140, 140, 1.4, .8);
+dress(M.asphalt,   flatCanvas('#50555c', 1800, .3, 1.3, .18), 26, 26, 1.1, .55);
+dress(M.concrete,  flatCanvas('#c3c6c9', 900, .4, 1.8, .07), 22, 22, .9, .8);
+
+/* Stone carries podium and site-wall faces here rather than garden walls, so
+   it gets the precast joint grid the pavers get — at this scale a blank noise
+   field on a two-storey podium reads as poured concrete, which is the wrong
+   material. */
+const precast = (h0)=> flatCanvas(h0, 700, .5, 2.0, .06, (ctx,w,hh)=>{
+  ctx.strokeStyle = 'rgba(0,0,0,.13)'; ctx.lineWidth = 2;
+  for(let i=0;i<=w;i+=64){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,hh); ctx.stroke(); }
+  for(let j=0;j<=hh;j+=42){ ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(w,j); ctx.stroke(); }
+});
+dress(M.stone,     precast('#dcd8d0'), 6, 6, .9, .8);
+dress(M.stoneDark, precast('#b8b3aa'), 6, 6, .9, .8);
+
+// pavers keep their joints, so they get a grid rather than pure noise
+dress(M.paver, flatCanvas('#d7cfc2', 300, .4, 1.4, .05, (ctx,w,h)=>{
+  ctx.strokeStyle = 'rgba(0,0,0,.20)'; ctx.lineWidth = 2;
+  for(let i=0;i<=w;i+=32){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,h); ctx.stroke(); }
+  for(let j=0;j<=h;j+=32){ ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(w,j); ctx.stroke(); }
+}), 14, 14, 1.6, .8);
+
+/* Glass and metal were the worst offenders without a cubemap — push their
+   contribution up now that there is one to sample. On a curtain-wall tower
+   this is the single biggest change in the file. */
+[M.glass, M.glassDark].forEach(m=>{ m.envMapIntensity = 1.5; m.needsUpdate = true; });
+M.metal.envMapIntensity = 1.25;
+M.water.envMapIntensity = 1.6;
+M.spandrel.envMapIntensity = .9;
+
+/* The sky is now doing part of the ambient job, so pull the hemisphere light
+   back to keep the overall exposure where it was. */
+exterior.traverse(o=>{ if(o.isHemisphereLight) o.intensity *= 0.72; });
 
 /* ============================================================ EXTERIOR SITE */
 const occluders = [];           // meshes used for POI pin occlusion tests
@@ -1603,18 +1776,11 @@ for(let z=-140;z<130;z+=18) slab(.9,9, M.stripe, -132, Y.stripe, z);
     }
     slab(140,.6, M.stripe, 78, Y.stall, z+9.2);
   }
-  // scattered cars
-  const carCols = [0xd8dde3,0x2b3440,0x8d1f28,0x27506e,0xe8e4dc,0x3c5a45,0x6a6e74];
+  // scattered cars — same body as the ones on the drives, so `car` owns the
+  // shape and this loop only decides where the occupied stalls are
   for(let r=0;r<4;r++) for(let i=0;i<16;i++){
     if(Math.random()>.55) continue;
-    const x = 16 + i*8.6, z = 34 + r*22;
-    const c = carCols[(Math.random()*carCols.length)|0];
-    const body = new THREE.MeshStandardMaterial({color:c, metalness:.55, roughness:.35});
-    const g = new THREE.Group(); g.position.set(x, 0, z); site.add(g);
-    const b = new THREE.Mesh(new THREE.BoxGeometry(3.6,1.35,7.6), body);
-    b.position.y=.95; b.castShadow=true; g.add(b);
-    const cab = new THREE.Mesh(new THREE.BoxGeometry(3.2,1.1,3.9), M.glassDark);
-    cab.position.set(0,1.95,-.3); cab.castShadow=true; g.add(cab);
+    car(16 + i*8.6, 34 + r*22);
   }
 })();
 
@@ -1654,6 +1820,25 @@ function tower(cfg){
   const mast = new THREE.Mesh(new THREE.CylinderGeometry(.22,.35,14,8), M.metal);
   mast.position.set(w*.2, 6+floors*fh+14, -d*.2); mast.castShadow=true; g.add(mast);
 
+  /* Roof plant. An orbit of a tower spends most of its arc looking down at the
+     roof, and this one carried a single concrete box and a mast — the least
+     detailed surface was the one most often in frame. Everything sits on the
+     crown's top face rather than on a guessed height, and the condenser bank is
+     pushed off-axis so it clears the penthouse instead of intersecting it. */
+  const roofY = 6 + floors*fh + 2.2;
+  // perimeter screen: what actually hides plant on a real roof, and from above
+  // it draws the roof's edge as a line rather than letting it end in nothing
+  for(const [sx,sz,sw,sd] of [[0,-1,w,.4],[0,1,w,.4],[-1,0,.4,d],[1,0,.4,d]]){
+    box(sw||.4, 1.7, sd||.4, M.metal, sx*(w/2-.6), roofY+.85, sz*(d/2-.6), g);
+  }
+  // condenser bank — three units in a row, the shape every office roof has
+  for(let i=-1;i<=1;i++){
+    box(3.0, 1.6, 2.2, M.metal, i*4.0, roofY+.8, -d*0.28, g);
+  }
+  // stair and lift overrun, offset from the penthouse so the roof reads as
+  // having two masses on it rather than one lump
+  box(4.4, 3.2, 4.0, M.concrete, -w*0.28, roofY+1.6, d*0.26, g);
+
   /* One hit/highlight slab per floor, sized just proud of the glass so it reads
      as that storey rather than z-fighting with it. Its material starts
      invisible — material.visible:false still raycasts, where object.visible:false
@@ -1677,22 +1862,64 @@ function tower(cfg){
     pl.userData.isPlate = true; pl.visible = false; pl.receiveShadow = true;
     g.add(pl); plates[i] = pl;
   }
-  /* A service core and demising walls on every floor, so a cut storey reads as a
-     tenanted plate rather than an empty tray. They sit inside the glass and are
-     hidden by it until the shaft is sectioned or made translucent. */
+  /* An office floor plate rather than a grey tray.
+
+     The previous version put one solid box in the middle for the core plus two
+     thin demising walls at the edges. From the plan-reading tilt a cut floor is
+     framed at, that reads as a filled rectangle with a couple of lines beside
+     it — which is the whole "grey block" problem. What makes the houses legible
+     is the same thing that makes an office floor legible: rooms, with walls
+     between them.
+
+     So the core is hollow now — you look down into the lift lobby, with the
+     stair and riser side split off inside it — a circulation corridor wraps it,
+     demising walls cut the perimeter into suites, and there are meeting rooms
+     on the glass line where they always are in reality, because that is where
+     the daylight is.
+
+     Dimensions are all fractions of w and d so the two towers, 34x26 and 28x24,
+     both get a plan that fits inside their own glass rather than one tuned to
+     the larger of them and poking through the smaller.
+
+     Hidden until the shell is cut or x-rayed. The old three walls were drawn
+     every frame behind opaque glass that hid them anyway; gating them on the
+     only two states that can show them is what pays for the extra walls. */
   {
-    const T = .5, H = fh - .9;
-    const part = (bw, bd, x, y, z)=>{
+    const T = .45, H = fh - .9;
+    const fit = (bw, bd, x, y, z)=>{
       const m = new THREE.Mesh(new THREE.BoxGeometry(bw, H, bd), M.partition);
       m.position.set(x, y + H/2 + .35, z);
       m.receiveShadow = true;
+      m.userData.isFitOut = true;
+      m.visible = false;              // restyle() owns this from here on
       g.add(m);
+      return m;
     };
+    const cw = w*0.30, cd = d*0.36, cx = -w*0.04;   // core footprint, off-centre
+    const corr = 2.4;                                // circulation width
     for(let i=1;i<=floors;i++){
       const y0 = 6 + (i-1)*fh;
-      part(w*0.28, d*0.30, -w*0.04, y0, 0);            // elevator and stair core
-      part(T, d*0.34,  w*0.22, y0,  d*0.24);           // demising wall, east suite
-      part(w*0.34, T, -w*0.26, y0, -d*0.22);           // demising wall, west suite
+      // core, as four walls rather than a mass
+      fit(cw, T, cx, y0, -cd/2);
+      fit(cw, T, cx, y0,  cd/2);
+      fit(T, cd, cx - cw/2, y0, 0);
+      fit(T, cd, cx + cw/2, y0, 0);
+      // stairs and risers split off from the lift lobby inside it
+      fit(T, cd*0.55, cx - cw*0.18, y0, -cd*0.20);
+      // corridor wrapping the core on its long sides
+      fit(cw + corr*2, T, cx, y0, -(cd/2 + corr));
+      fit(cw + corr*2, T, cx, y0,   cd/2 + corr);
+      // demising walls, splitting the perimeter into two suites
+      fit(T, d*0.30, cx + cw/2 + corr + 3.5, y0,  d*0.30);
+      fit(T, d*0.30, cx - cw/2 - corr - 3.5, y0, -d*0.30);
+      /* Meeting rooms on the glass. The side wall runs from the room's inner
+         face out toward the facade and stops short of it — d*0.16 deep centred
+         at d*0.40 lands its far edge inside d/2 on both towers, where a deeper
+         room would have pushed through the smaller one's glazing. */
+      fit(w*0.22, T, -w*0.30, y0,  d*0.32);
+      fit(T, d*0.16, -w*0.19, y0,  d*0.40);
+      fit(w*0.22, T,  w*0.30, y0, -d*0.32);
+      fit(T, d*0.16,  w*0.19, y0, -d*0.40);
     }
   }
 
@@ -1825,6 +2052,175 @@ for(let i=0;i<26;i++){
 // planter beds
 slab(120, 12, M.grass, -46, Y.median, 22);
 slab(12, 90, M.grass, 96, Y.median, -30);
+
+/* ============================================================= SITE DETAIL
+   An aerial capture of a campus is mostly ground and roof, and those were the
+   two surfaces carrying the least. Everything below is chosen for what it does
+   at orbit distance rather than up close: tall thin things, because their
+   shadows are legible from above long after the object itself stops being;
+   flat markings, because they say what a piece of paving is *for*; and the
+   back-of-house that every real site has and no rendering ever remembers.
+
+   Nothing here joins `occluders`. That list exists so a POI pin can tell when a
+   mass is in front of it, and a lamp standard or a flagpole drifting across a
+   pin would only make it flicker.
+
+   Ground items take a `Y.*` height like everything else. The two new markings
+   sit at Y.stall and Y.stripe, which is where the lot's existing stall and lane
+   lines already are — a crosswalk is a lane marking, and an accessible stall is
+   a stall marking, so neither needs a new layer in the stack. */
+
+/* A car. Shared with the parking field above rather than duplicated, since the
+   shape is the same whether it is standing in a stall or waiting on a drive.
+   The palette is local so this stays callable from `parking()`, which runs
+   earlier in the file — a hoisted function can reach back, a `const` above it
+   could not. */
+function car(x, z, rotY, col){
+  const COLS = [0xd8dde3,0x2b3440,0x8d1f28,0x27506e,0xe8e4dc,0x3c5a45,0x6a6e74];
+  const g = new THREE.Group(); g.position.set(x, 0, z);
+  if(rotY) g.rotation.y = rotY;
+  site.add(g);
+  const body = new THREE.MeshStandardMaterial({
+    color: col != null ? col : COLS[(Math.random()*COLS.length)|0],
+    metalness:.55, roughness:.35});
+  const b = new THREE.Mesh(new THREE.BoxGeometry(3.6,1.35,7.6), body);
+  b.position.y=.95; b.castShadow=true; g.add(b);
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(3.2,1.1,3.9), M.glassDark);
+  cab.position.set(0,1.95,-.3); cab.castShadow=true; g.add(cab);
+  return g;
+}
+
+/* ---- lot lighting ----
+   The single most recognisable thing on a commercial lot from the air, and the
+   reason is the shadows: a 9m standard throws a stripe across four stalls. Two
+   heads per pole on the aisles, one on the edges. */
+function lampStandard(x, z, heads){
+  const g = new THREE.Group(); g.position.set(x, 0, z); site.add(g);
+  const p = new THREE.Mesh(new THREE.CylinderGeometry(.22,.34,9,8), M.metal);
+  p.position.y = 4.5; p.castShadow = true; g.add(p);
+  for(let i=0;i<(heads||2);i++){
+    const dir = heads === 1 ? 1 : (i ? 1 : -1);
+    box(2.6, .22, .34, M.metal, dir*1.3, 9, 0, g);
+    box(2.2, .34, 1.1, M.spandrel, dir*2.4, 8.8, 0, g);
+    const lens = box(1.9, .1, .9, M.emissive, dir*2.4, 8.62, 0, g);
+    lens.castShadow = false;
+  }
+  return g;
+}
+// on the aisle centrelines, so each pole lights the rows either side of it
+for(let r=0;r<3;r++) for(const x of [26, 78, 130]) lampStandard(x, 45 + r*22, 2);
+// and along the frontage road, single-headed toward the carriageway
+for(const x of [-170,-110,-50,10,70,130,190]) lampStandard(x, 104, 1);
+
+/* ---- accessible stalls ----
+   Wider bays with a hatched aisle between them, set where they belong: nearest
+   the lobby, not wherever there was room. Flat markings only — a wheel stop
+   would be three pixels at this distance and cost a draw call each. */
+(function accessibleStalls(){
+  const z0 = 34, x0 = 14;
+  for(let i=0;i<2;i++){
+    const x = x0 + i*11.4;
+    slab(.6, 17, M.stripe, x, Y.stall, z0);
+    slab(.6, 17, M.stripe, x + 5.6, Y.stall, z0);
+    // the hatched loading aisle, drawn as diagonals rather than a solid fill so
+    // it still reads as hatching once the texture resolves
+    for(let k=0;k<6;k++){
+      const h = slab(6.6, .5, M.accent, x + 8.4, Y.stall, z0 - 7 + k*2.8);
+      h.rotation.z = Math.PI/5;
+    }
+  }
+})();
+
+/* ---- footways and crossings ----
+   Buildings sitting straight on grass is the tell of a massing model. Walks
+   cost two slabs each and turn the site from objects into a plan. */
+slab(460, 5.5, M.concrete, 0, Y.walk, 103);           // frontage footway
+slab(5.5, 300, M.concrete, -117, Y.walk, -10);        // west footway
+slab(5.5, 58, M.concrete, -8, Y.walk, 74);            // courtyard spur to the road
+slab(64, 5.5, M.concrete, 36, Y.walk, 30);            // lot to lobby
+// ladder crossings at the two entries, on the road rather than the footway
+for(const [cx,cz,rot] of [[-8,118,0],[-132,60,Math.PI/2]]){
+  for(let i=-3;i<=3;i++){
+    const bar = slab(1.4, 24, M.stripe, cx, Y.stripe, cz);
+    if(rot){ bar.rotation.z = rot; bar.position.set(cx, Y.stripe, cz + i*2.6); }
+    else bar.position.set(cx + i*2.6, Y.stripe, cz);
+  }
+}
+
+/* ---- entry monument ----
+   Every campus has one, and it gives the frontage a front. Kept low and wide
+   so it reads as a sign rather than a wall from above. */
+(function monument(){
+  const g = new THREE.Group(); g.position.set(-8, 0, 96); site.add(g);
+  box(15, 2.4, 1.6, M.stoneDark, 0, 1.2, 0, g);
+  box(13, 1.5, .3, M.spandrel, 0, 1.5, .9, g);
+  // the group sits at y 0, so children take absolute stack heights — not
+  // offsets from it
+  slab(21, 9, M.grass, 0, Y.median, 0, 0, g);            // planted apron
+  for(let i=-1;i<=1;i++) tree(-8 + i*7, 90, .55 + Math.random()*.2);
+})();
+
+/* ---- service yard ----
+   Behind the pavilion, where the loading actually happens. This is the part
+   renderings leave out, and leaving it out is exactly what makes a site read
+   as a brochure rather than a place. */
+(function serviceYard(){
+  const g = new THREE.Group(); g.position.set(-104, 0, 46); site.add(g);
+  slab(30, 22, M.concrete, 0, Y.walk - .01, 0, 0, g);
+  // three-sided enclosure: the open side faces the drive, as it has to
+  box(.6, 3.2, 20, M.stoneDark, -12, 1.6, 0, g);
+  box(24, 3.2, .6, M.stoneDark, 0, 1.6, -10, g);
+  box(24, 3.2, .6, M.stoneDark, 0, 1.6, 10, g);
+  box(6.4, 2.4, 3.4, M.metal, -6, 1.2, -4, g);          // skip
+  box(6.4, 2.4, 3.4, M.metal, -6, 1.2, 3, g);
+  // transformer pad and a bollard line protecting it
+  box(3.4, 2.2, 2.6, M.concrete, 8, 1.1, -6, g);
+  for(let i=0;i<5;i++){
+    const bol = new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,1.1,8), M.accent);
+    bol.position.set(4.6, .55, -8 + i*3.2); bol.castShadow = true; g.add(bol);
+  }
+  // a box truck at the dock, which is what says "service" at a glance
+  const t = new THREE.Group(); t.position.set(7, 0, 6); t.rotation.y = Math.PI/2; g.add(t);
+  box(3.4, 1.4, 8.4, M.white, 0, 1.5, 0, t);
+  box(3.2, 2.6, 5.6, M.white, 0, 3.0, -1.2, t);
+  box(3.0, 1.2, 2.4, M.glassDark, 0, 2.4, 3.0, t);
+})();
+
+/* ---- flagpoles ----
+   On the courtyard axis, set north of the internal drive rather than on it.
+   Three thin verticals that read almost entirely as shadow from above, which is
+   the point of them here. */
+for(let i=-1;i<=1;i++){
+  const p = new THREE.Mesh(new THREE.CylinderGeometry(.14,.2,16,8), M.white);
+  p.position.set(-8 + i*4.4, 8, 78); p.castShadow = true; site.add(p);
+}
+
+/* ---- traffic ----
+   The roads were empty while the lot was half full, which reads as a site
+   photographed at 6am with a busy car park.
+
+   The rotations are not decoration: `car` builds its body 7.6 long on z, so a
+   car with no rotation points north. The frontage and the internal drive run
+   east-west and take a quarter turn; the west road runs north-south and takes
+   none. Get this wrong and the cars sit broadside across their own lanes. */
+car(-60, 112, Math.PI/2, 0x1d2b3a);
+car(  6, 124, Math.PI/2, 0xd8dde3);
+car( 92, 112, Math.PI/2, 0x6a6e74);
+car(-132, -46, 0, 0x8d1f28);
+car(-132,  12, 0, 0xe8e4dc);
+car( -20,  60, Math.PI/2, 0x27506e);
+
+/* ---- bus shelter ----
+   On the frontage, facing the carriageway. Small, but it puts the campus on a
+   network rather than on an island. */
+(function shelter(){
+  const g = new THREE.Group(); g.position.set(52, 0, 100); site.add(g);
+  slab(9, 4.4, M.paver, 0, Y.walk + .01, 0, 0, g);
+  for(const sx of [-1,1]) box(.24, 2.9, .24, M.metal, sx*4.1, 1.45, -1.9, g);
+  box(9, .18, 4.4, M.glass, 0, 2.95, 0, g);              // canopy
+  box(9, 2.6, .18, M.glass, 0, 1.4, 1.95, g);            // back screen
+  box(7.4, .5, 1.2, M.woodDark, 0, .95, 1.2, g);         // bench
+})();
 
 /* Solve the orbit angle + distance that puts a POI's front elevation on screen.
    theta is derived from the facade normal; distance from the frame box and the
@@ -3360,6 +3756,13 @@ function restyle(){
   if(!ghosted) return;
   ghosted.traverse(n=>{
     if(!n.isMesh || !n.userData._solid) return;
+    /* The fit-out only exists to be looked at through something: x-rayed glass,
+       or the open face of a cut. Outside those two states it is behind opaque
+       curtain wall, so it is switched off rather than drawn and hidden — this is
+       every partition on every floor of a fourteen-storey tower, so it is worth
+       switching off. Releasing the tower runs setXray(false) and setSection(0)
+       while it is still claimed, so it turns itself off on the way out. */
+    if(n.userData.isFitOut) n.visible = xrayOn || sectionOn;
     const mats = Array.isArray(n.material) ? n.material : [n.material];
     for(const m of mats){
       m.transparent = xrayOn;

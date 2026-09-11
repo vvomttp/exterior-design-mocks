@@ -23,19 +23,25 @@ interaction, and change them the way you would change a drawing.
 ## Layout
 
 ```
-index.html              landing page — five cards, two-up grid
+index.html              landing page — four strategy cards two-up, plus one study
 commercial/a/           multi-entry:  office campus, two towers, floors per tower
 commercial/b/           single-entry: one building, one pin
 homes/a/                multi-entry:  residential community, floors per home
 homes/b/                single-entry: one listing, one pin
-homes/a-hifi/           fidelity study — homes/a with better materials and geometry
 homes/a-loading/        loading study — homes/a, kept whole, iterating on the loader
 PROTOTYPE-RATIONALE.md  STALE. Predates several rounds of changes. Verify before trusting.
 ```
 
-`homes/a-hifi/` and `homes/a-loading/` are both copies of `homes/a/` that
-diverge from it. A change to a shared system usually has to land in **all
-three**, and they drift — always grep every one rather than assuming.
+`homes/a-loading/` is a copy of `homes/a/` that diverges from it. A change to a
+shared system has to land in **both**, and they drift — always grep both rather
+than assuming.
+
+There used to be a third, `homes/a-hifi/`: a fidelity study carrying image-based
+lighting off the procedural sky, procedural normal maps on siding and roofing,
+and per-material `envMapIntensity`. It won, so it was promoted — `homes/a/` *is*
+that build now, and the study folder is gone. If you are looking for the
+reasoning behind the environment map, it is in the image-based lighting comment
+in `homes/a/`, not in a folder that no longer exists.
 
 `homes/a-loading/` is deliberately a full copy rather than a stripped-down
 harness. `startReveal()` collects its targets at call time and reveals the
