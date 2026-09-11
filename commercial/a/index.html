@@ -1482,12 +1482,33 @@ const M = {
      raycast, so the tower stays hoverable storey by storey without anything
      showing until you land on one. */
   floorIdle:  new THREE.MeshBasicMaterial({visible:false}),
+  /* The lit storey marker. Translucent, and it does not write depth.
+
+     It used to be opaque, and that is what made a selected floor look like a
+     solid grey block. The slab it paints is w+1.1 by d+1.1 by fh*0.94 — a box
+     that wraps the whole storey, plate and partitions inside it — and it is the
+     one mesh in the tower claimMaterials deliberately skips, so it is never
+     clipped. Its top face lands at 64.674 against a cut plane at 64.72: it
+     survives the section by four hundredths of a unit and caps the open floor
+     from above, hiding everything the cut was made to show.
+
+     Painting it as a tint rather than a surface makes that impossible. It also
+     suits what the thing is — a highlight over a storey should colour it, not
+     replace it — and it leaves the hit-testing alone, which is the job the slab
+     actually exists for. */
   floorHot:   new THREE.MeshStandardMaterial({color:0xeaf1fb, emissive:0xffffff,
-                emissiveIntensity:.22, metalness:.35, roughness:.28}),
-  // the floor you look down onto when a level is cut open
-  floorPlate: new THREE.MeshStandardMaterial({color:0xd9d5cd, metalness:0, roughness:.92}),
-  // service core and demising walls, read only once the shaft is cut open
-  partition:  new THREE.MeshStandardMaterial({color:0xe6e4df, metalness:0, roughness:.95}),
+                emissiveIntensity:.22, metalness:.35, roughness:.28,
+                transparent:true, opacity:.34, depthWrite:false}),
+  /* The floor you look down onto when a level is cut open, and the walls
+     standing on it. These two are a pair and have to be read as a pair: a cut
+     floor is seen from almost directly overhead, so the only thing separating a
+     partition from the slab under it is tone and the shadow it throws. At the
+     old values — d9d5cd against e6e4df — they were two near-whites four points
+     apart, and a fully modelled office floor rendered as one flat grey sheet.
+     The plate is now a mid-tone floor finish, which is what a tenanted plate
+     looks like from above anyway, and the partitions stayed pale. */
+  floorPlate: new THREE.MeshStandardMaterial({color:0x9aa0a6, metalness:0, roughness:.9}),
+  partition:  new THREE.MeshStandardMaterial({color:0xf2f1ee, metalness:0, roughness:.95}),
   woodLight:  new THREE.MeshStandardMaterial({color:0xd9b98c, metalness:0,   roughness:.7}),
   woodDark:   new THREE.MeshStandardMaterial({color:0x8b6a45, metalness:0,   roughness:.75}),
   carpet:     new THREE.MeshStandardMaterial({color:0x40495a, metalness:0,   roughness:1}),
@@ -1784,6 +1805,13 @@ for(let z=-140;z<130;z+=18) slab(.9,9, M.stripe, -132, Y.stripe, z);
   }
 })();
 
+/* The spandrel band height does more work than the facade. Because the bands
+   are centred on each slab line, half of this is how far a section cut has to
+   drop below a ceiling before it stops leaving a lid of band across the open
+   floor. CUT_EPS is derived from it, and there is a check beside CUT_EPS that
+   complains if the two ever drift apart again. */
+const SPANDREL_H = .85;
+
 /* --- Tower builder ------------------------------------------------------- */
 function tower(cfg){
   const g = new THREE.Group(); g.position.set(cfg.x,0,cfg.z);
@@ -1801,7 +1829,7 @@ function tower(cfg){
   g.add(shaft); occluders.push(shaft);
 
   for(let i=0;i<=floors;i++){
-    const band = new THREE.Mesh(new THREE.BoxGeometry(w+.7, .85, d+.7), M.spandrel);
+    const band = new THREE.Mesh(new THREE.BoxGeometry(w+.7, SPANDREL_H, d+.7), M.spandrel);
     band.position.y = 6 + i*fh; band.castShadow=true; band.receiveShadow=true; g.add(band);
   }
   // vertical mullion fins
@@ -1881,17 +1909,33 @@ function tower(cfg){
      both get a plan that fits inside their own glass rather than one tuned to
      the larger of them and poking through the smaller.
 
-     Hidden until the shell is cut or x-rayed. The old three walls were drawn
-     every frame behind opaque glass that hid them anyway; gating them on the
-     only two states that can show them is what pays for the extra walls. */
+     Built plainly visible, exactly as the houses build theirs. An earlier pass
+     here defaulted them to visible:false and had restyle() switch them on for
+     the x-ray and section states, to save drawing them behind opaque glass. It
+     saved the draws and showed nothing, so it is gone: whatever is keeping this
+     floor grey, adding a second thing that can hide it was not helping. The
+     clip plane already removes the storeys above the cut, which is the only
+     hiding these actually need. */
   {
-    const T = .45, H = fh - .9;
+    /* fh - 1.1 rather than fh - 0.9, so the wall tops finish 0.75 under the
+       ceiling. The cut plane sits 0.5 under it — see CUT_EPS, which has to
+       thread between the spandrel band's lower face at 0.425 and these tops.
+       At fh - 0.9 that gap was 0.05, which is not a margin, it is a coincidence
+       waiting to be broken by the next change to either number. */
+    const T = .45, H = fh - 1.1;
     const fit = (bw, bd, x, y, z)=>{
       const m = new THREE.Mesh(new THREE.BoxGeometry(bw, H, bd), M.partition);
       m.position.set(x, y + H/2 + .35, z);
       m.receiveShadow = true;
-      m.userData.isFitOut = true;
-      m.visible = false;              // restyle() owns this from here on
+      /* These cast. That is the whole reason a cut floor reads at all.
+         A cut floor is looked at from almost directly overhead, and partitions
+         at 0xe6e4df standing on a plate at 0xd9d5cd are two nearly identical
+         near-whites lit flat from above — geometry that is present, drawn, and
+         completely invisible, which is exactly what a "solid grey block" is.
+         The shadow is the only thing that separates a wall from the floor it
+         stands on at this angle. At the sun's 49 degrees a 3.3 wall throws
+         about 2.9 units, which is legible and cheap. */
+      m.castShadow = true;
       g.add(m);
       return m;
     };
@@ -3756,13 +3800,6 @@ function restyle(){
   if(!ghosted) return;
   ghosted.traverse(n=>{
     if(!n.isMesh || !n.userData._solid) return;
-    /* The fit-out only exists to be looked at through something: x-rayed glass,
-       or the open face of a cut. Outside those two states it is behind opaque
-       curtain wall, so it is switched off rather than drawn and hidden — this is
-       every partition on every floor of a fourteen-storey tower, so it is worth
-       switching off. Releasing the tower runs setXray(false) and setSection(0)
-       while it is still claimed, so it turns itself off on the way out. */
-    if(n.userData.isFitOut) n.visible = xrayOn || sectionOn;
     const mats = Array.isArray(n.material) ? n.material : [n.material];
     for(const m of mats){
       m.transparent = xrayOn;
@@ -3785,11 +3822,36 @@ function paintBands(){
 
 function setXray(on){ if(xrayOn !== on){ xrayOn = on; restyle(); } }
 
-/* The cut sits a hair under the ceiling rather than on it. At the top floor the
-   plane would otherwise land exactly on the slab line where the shaft, the
-   parapet and the crown all meet, and a face coplanar with a clip plane
-   flickers per pixel as the interpolated distance rounds either side of zero. */
-const CUT_EPS = 0.08;
+/* How far under the ceiling the cut sits. Two things set this, and the second
+   one is why a selected floor used to render as a solid grey lid.
+
+   The original reason: at the top floor a plane exactly on the ceiling would
+   land on the slab line where the shaft, the parapet and the crown all meet,
+   and a face coplanar with a clip plane flickers per pixel as its interpolated
+   distance rounds either side of zero. Any nonzero epsilon fixes that, which is
+   why 0.08 looked sufficient.
+
+   The reason it was not: the spandrel bands are 0.85-tall boxes *centred* on
+   each slab line, so band n straddles floor n's ceiling from -0.425 to +0.425.
+   A plane only 0.08 under the ceiling therefore left a 0.345-thick lip of that
+   band in place — 28.7 units across, wider than the floor plate, spanning the
+   whole storey at ceiling-0.425, which is above the partitions at
+   ceiling-0.55. So the cut opened the floor and then laid a lid straight back
+   over it. And because sectioned materials switch to DoubleSide, that lid's
+   downward face gets its normal flipped and shades as though it faced the sun:
+   not a dark soffit you might notice and question, but a bright, flat,
+   near-white sheet that reads exactly like an untouched roof.
+
+   0.5 clears the band's lower face entirely (it needs anything over 0.425) and
+   still sits above the partition tops, which is the window this has to land in.
+   Widen the bands or raise the partitions and this number has to move with
+   them — the check below is there to say so out loud. */
+const CUT_EPS = 0.5;
+if(CUT_EPS <= SPANDREL_H/2){
+  console.warn('[section] CUT_EPS ' + CUT_EPS + ' does not clear the spandrel band\'s '
+    + 'lower face at ' + (SPANDREL_H/2) + '. A cut floor will render with a lid of band '
+    + 'over it, which looks like the section never happened.');
+}
 
 function setSection(n){
   const on = n > 0;
